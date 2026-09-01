@@ -3,3 +3,8 @@ dist
 .env
 .env.local
 *.local
+
+# Scratch files from tooling; never part of a build.
+cm.tmp
+*.tmp
+.shots/
