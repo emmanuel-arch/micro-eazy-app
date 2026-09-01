@@ -112,6 +112,29 @@ export function setBearer(token: string | null) {
   bearer = token;
 }
 
+// ── THE HOUR RUNNING OUT ────────────────────────────────────────────────────
+// The borrower cookie lasts one hour. Every gated route answers an expired one
+// with 401 and `needsOtp: true` (see `otpRequired()` in the suite's
+// portal/session.ts), which is an INSTRUCTION — send them back to the phone
+// gate — and not an error to render.
+//
+// It is published from here rather than handled at each call site because it
+// can arrive on any of a dozen calls, from any screen, at any moment. Handling
+// it twelve times is twelve chances to forget once, and the screen that forgets
+// shows a customer a permanent spinner or a raw error where a sign-in prompt
+// belongs.
+const unauthorised = new Set<() => void>();
+
+/** Called whenever the server says the session is gone. Returns an unsubscribe. */
+export function onUnauthorised(fn: () => void): () => void {
+  unauthorised.add(fn);
+  return () => unauthorised.delete(fn);
+}
+
+function isNeedsOtpBody(body: unknown): boolean {
+  return Boolean(body && typeof body === "object" && (body as { needsOtp?: unknown }).needsOtp === true);
+}
+
 export interface ApiOptions {
   /** Does this call need a signed-in borrower? Decides failover eligibility. */
   auth?: boolean;
@@ -212,6 +235,13 @@ export async function apiFetch<T = unknown>(
       const text = await res.text();
       const body = text ? safeJson(text) : null;
       if (!res.ok) {
+        // An expired or missing borrower session. Tell the app once, here, so
+        // the guard can move them to the gate wherever they are standing — then
+        // still throw, because the CALL failed and its caller must not carry on
+        // as though it returned data.
+        if (res.status === 401 && isNeedsOtpBody(body)) {
+          unauthorised.forEach((fn) => fn());
+        }
         throw new ApiError(messageFrom(body) ?? `Request failed (${res.status})`, res.status, body);
       }
       if (state.lastError) publish({ lastError: null, authDegraded: false });

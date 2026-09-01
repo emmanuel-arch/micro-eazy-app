@@ -21,11 +21,17 @@
 // The one thing that never moves below the fold on a 360×640 screen is the
 // continue button — hence the deck's aspect ratio dropping on small screens.
 //
-// ── WHAT THIS SCREEN DOES NOT DO ─────────────────────────────────────────────
-// It does not verify anything. It collects a number and hands off to the
-// onboarding host, which is where identity is actually proved against the
-// server. Nothing typed here grants anything, which is the same rule every
-// other screen in this app follows.
+// ── WHAT THIS SCREEN DOES AND DOES NOT DO ────────────────────────────────────
+// It asks the server to send a code to the number typed here, and then hands
+// off to the gate (/verify), which is where identity is actually proved. It
+// does NOT decide anything: a code being sent is not a session, and nothing
+// typed here grants access to a single screen — the same rule every other
+// screen in this app follows.
+//
+// It used to navigate straight to /join on nine digits, sending nothing. That
+// meant onboarding opened for anyone who typed a number, and the first time the
+// app asked the server who they were would have been much later, on a screen
+// that assumed it already knew.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +39,7 @@ import { ArrowRight, Phone, ShieldCheck } from "lucide-react";
 import { Voices } from "../components/media/Voices";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
+import { useSession } from "../lib/session";
 
 /**
  * Kenyan mobile numbers, loosely. Deliberately loose: this is a courtesy check
@@ -44,16 +51,49 @@ const looksLikeAPhone = (v: string) => v.replace(/\D/g, "").length >= 9;
 
 export default function Welcome() {
   const navigate = useNavigate();
+  const { requestCode } = useSession();
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const ok = looksLikeAPhone(phone);
 
-  const submit = (e: FormEvent) => {
+  // ── THIS IS WHERE THE FUNNEL USED TO LEAK ──────────────────────────────────
+  // The button navigated straight to /join. Nothing was sent, nothing was
+  // verified, and onboarding opened for anybody who typed nine digits. Now the
+  // number has to receive a code before the app will go anywhere.
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (!ok) return;
-    navigate("/join");
+    if (!ok || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await requestCode(phone);
+    setBusy(false);
+
+    if (!r.ok) {
+      setError(r.message);
+      return;
+    }
+
+    // `delivered: false` still comes back 200 with success:true — the request was
+    // accepted, no provider could send it. Moving on silently would park somebody
+    // on a code screen waiting for an SMS that is not coming. Outside production
+    // the route hands back the code itself so the flow stays walkable.
+    if (!r.delivered) {
+      if (r.devCode) {
+        setDevCode(r.devCode);
+      } else {
+        setError(r.message || "We could not send the code just now. Please try again shortly.");
+        return;
+      }
+    }
+
+    // The phone travels in route state, not in the URL: a number in an address
+    // bar ends up in history, in screenshots, and in shared links.
+    navigate("/verify", { state: { phone } });
   };
 
   return (
@@ -138,8 +178,32 @@ export default function Welcome() {
               </p>
             )}
 
-            <LiquidButton type="submit" size="lg" block trailingIcon={ArrowRight} className="mt-5">
-              Continue
+            {/* The server's own words, not a generic failure. It is the thing
+                that knows about rate limits ("too many codes for this number"),
+                and rewriting that as "something went wrong" would hide the one
+                instruction the customer can act on. */}
+            {error && (
+              <p role="alert" className="mt-3 text-[12.5px] font-medium leading-snug" style={{ color: "#e11d48" }}>
+                {error}
+              </p>
+            )}
+            {devCode && !error && (
+              <p className="mt-3 rounded-lg px-3 py-2 text-[12.5px] leading-snug text-ink-soft" style={{ background: "var(--surface-sunk)" }}>
+                SMS is not configured here, so no message will arrive — your code is{" "}
+                <strong className="tnum font-semibold text-ink">{devCode}</strong>.
+              </p>
+            )}
+
+            <LiquidButton
+              type="submit"
+              size="lg"
+              block
+              trailingIcon={ArrowRight}
+              className="mt-5"
+              loading={busy}
+              disabled={busy}
+            >
+              {busy ? "Sending your code" : "Continue"}
             </LiquidButton>
           </form>
 

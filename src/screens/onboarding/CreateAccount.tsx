@@ -26,6 +26,7 @@
 import { useState } from "react";
 import { IdCard, Camera, ShieldCheck, ArrowRight, Info } from "lucide-react";
 import { LiquidButton } from "../../components/ui/LiquidButton";
+import { useSession } from "../../lib/session";
 
 /** Kenyan national ID numbers run 7–8 digits. Anything else is a typo, and
  *  telling somebody that now is kinder than a registry miss ninety seconds on. */
@@ -34,7 +35,16 @@ function idLooksValid(v: string) {
 }
 
 export default function CreateAccount({ onDone }: { onDone?: (nationalId: string) => void }) {
-  const [nationalId, setNationalId] = useState("");
+  // The gate already took this and checked it against the verified phone, so
+  // asking again would be asking somebody to retype a number we are holding —
+  // and any answer that DIFFERED from it would be a lie the screen accepted,
+  // since every downstream call sends the session's ID regardless.
+  //
+  // The consent below is NOT prefilled and never will be. It is a separate act
+  // from identifying yourself, and a permission carried over from another
+  // screen is a permission nobody gave.
+  const { nationalId: verifiedId } = useSession();
+  const [nationalId, setNationalId] = useState(verifiedId ?? "");
   const [consented, setConsented] = useState(false);
   const [touched, setTouched] = useState(false);
 

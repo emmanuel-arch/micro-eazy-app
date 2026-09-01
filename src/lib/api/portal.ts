@@ -38,29 +38,115 @@ const who = (nationalId: string) => JSON.stringify({ lenderSlug: LENDER_SLUG, na
 
 // ── Session ──────────────────────────────────────────────────────────────────
 
+/**
+ * GET /api/portal/session — connected-suite/src/app/api/portal/session/route.ts
+ *
+ * READ THE ROUTE, NOT THE OLD TYPE. This interface previously declared
+ * `{ success, verified, phone, name }`, and the route has never returned any of
+ * those four fields. Every one of them would have been `undefined` at runtime,
+ * so `if (session.verified)` was permanently false and the app would have sent
+ * a verified customer back to the phone gate on every reload — compiling
+ * cleanly the whole way. It is the exact failure this file's header warns
+ * about, and it was sitting in the file that does the warning.
+ *
+ * THE PHONE COMES BACK MASKED, and that is not a formatting choice: the cookie
+ * is the credential, so the number itself is never re-issued to the client.
+ * `phoneMasked` is display text ("0712 ••• 678") and must never be sent back to
+ * an endpoint that expects a real msisdn.
+ */
 export interface Session {
-  success: boolean;
-  verified: boolean;
-  phone?: string;
-  name?: string | null;
+  authenticated: boolean;
+  /** Which lender the cookie is bound to. A borrower verified at one lender
+   *  holds no standing at another — the server enforces it, and this lets the
+   *  client notice a mismatch before making a call that will 401. */
+  lenderSlug?: string;
+  /** "0712 ••• 678" — for showing, never for sending. */
+  phoneMasked?: string;
+  /** Only present when the request asked `?phone=`. Answers "is this the
+   *  number you already verified?" and nothing else. */
+  matchesPhone?: boolean;
 }
 
 export const getSession = () => apiFetch<Session>("/api/portal/session", {}, { auth: false });
 
+/**
+ * The body every gated portal route returns with its 401 (see `otpRequired()`
+ * in connected-suite/src/lib/portal/session.ts). `needsOtp` is the instruction
+ * to send the customer back to the phone gate rather than to render an error —
+ * an expired session is the normal end of an hour, not a fault.
+ */
+export interface NeedsOtp {
+  success: false;
+  needsOtp: true;
+  message: string;
+}
+
+export function isNeedsOtp(body: unknown): body is NeedsOtp {
+  return Boolean(body && typeof body === "object" && (body as { needsOtp?: unknown }).needsOtp === true);
+}
+
 export const signOut = () =>
   apiFetch<{ success: boolean }>("/api/portal/session", { method: "DELETE" }, { auth: true, idempotent: true });
 
-export const sendOtp = (phone: string) =>
-  apiFetch<{ success: boolean; message?: string }>(
+/**
+ * POST /api/portal/otp — connected-suite/src/app/api/portal/otp/route.ts
+ *
+ * `delivered` is the field that matters and the old type omitted it. It is
+ * FALSE when no SMS provider could be reached, and the route still answers 200
+ * with `success: true` — because from the funnel's point of view the request
+ * was accepted. A screen that reads only `success` therefore tells somebody to
+ * check a phone that will never buzz.
+ *
+ * `devCode` is present ONLY outside production and only when delivery failed.
+ * It exists so the flow is walkable locally without an SMS bill. Never render
+ * it without saying what it is.
+ */
+export interface OtpSent {
+  success: boolean;
+  /** False when no provider could send. The screen must say so. */
+  delivered: boolean;
+  expiresInSec: number;
+  /** Non-production only, and only when `delivered` is false. */
+  devCode?: string;
+  message: string;
+}
+
+export const sendOtp = (phone: string, lang?: "en" | "sw") =>
+  apiFetch<OtpSent>(
     "/api/portal/otp",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, ...(lang ? { lang } : {}) }) },
     // Safe to repeat: the server rate-limits, and a customer who did not get the
     // first SMS pressing "resend" is the expected case rather than an error.
     { auth: false, idempotent: true },
   );
 
+/**
+ * POST /api/portal/otp/verify — .../otp/verify/route.ts
+ *
+ * THERE IS NO TOKEN. The old type declared `token?: string`, and the route has
+ * never issued one — it mints an httpOnly `lms_borrower` cookie and returns
+ * `{ success, phone, lender }`. Anything written against that optional token
+ * would have silently held `undefined` forever, which is also the standing
+ * answer to TRANSPORT_TODO in net/transport.ts: until this route returns a
+ * bearer, authenticated calls cannot cross to the fallback origin.
+ *
+ * A wrong or expired code is a **401** carrying `reason`, so the screen can
+ * tell "that code is wrong" from "that code has expired" — two different
+ * instructions to the customer, and collapsing them into one makes the retry
+ * advice wrong half the time.
+ */
+export interface OtpVerified {
+  success: boolean;
+  /** The msisdn the session is now bound to, server-normalised to 2547XXXXXXXX. */
+  phone?: string;
+  lender?: string;
+  /** Present on the 401 body only. */
+  reason?: "invalid" | "expired" | "locked";
+  message?: string;
+}
+
 export const verifyOtp = (phone: string, code: string) =>
-  apiFetch<{ success: boolean; token?: string; message?: string }>(
+  apiFetch<OtpVerified>(
     "/api/portal/otp/verify",
     { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, code }) },
     { auth: false },
@@ -71,6 +157,67 @@ export const signInWithPin = (nationalId: string, pin: string) =>
     "/api/portal/pin",
     { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, pin }) },
     { auth: false },
+  );
+
+// ── Are you already a customer? ──────────────────────────────────────────────
+// connected-suite/src/app/api/portal/enrolment/route.ts
+//
+// The question the app must answer the instant a code is verified, because the
+// two answers are two different apps: a returning customer opens on their
+// balance, a new one opens on onboarding. It checks BOTH books — our Postgres,
+// and (for a bridged lender like Micromart) the lender's own ServiceSuite,
+// where every customer who predates this platform actually lives.
+//
+// ── READ `reachable` BEFORE YOU READ `enrolled` ─────────────────────────────
+// `enrolled: false` means one of two completely different things, and the
+// difference is the whole point of this type:
+//
+//   reachable: true   Every book was consulted and this person is not in any of
+//                     them. They are new. Start onboarding.
+//   reachable: false  A book could not be read — the lender's SQL Server is
+//                     down, or the connection is not configured. We DO NOT KNOW.
+//                     Onboarding them here would push a customer of ten years
+//                     through KYC because of somebody else's network, and would
+//                     open a second account against a phone that already has one.
+//
+// So the app holds on `reachable: false` and offers a retry. It never guesses.
+
+export interface Enrolment {
+  success: boolean;
+  /** True only when the customer was positively found in one of the books. */
+  enrolled: boolean;
+  /** Which book answered. Null when not found, or not known. */
+  where: "local" | "servicesuite" | null;
+  lender: string;
+  /** First name only, for the greeting. Absent when not found. */
+  firstName?: string | null;
+  /**
+   * TRUE when every book that exists for this lender was actually read. When
+   * false, `enrolled: false` is "we could not check", NOT "you are new".
+   */
+  reachable: boolean;
+  /**
+   * Several records share this phone number, or the ID disagrees with the row
+   * on it. NOT a new customer — signing them up again creates a second account
+   * against a live one. This is a case for a human and the screen says so.
+   */
+  ambiguous?: boolean;
+  /**
+   * Which ServiceSuite entity was actually read. Returned because it is an
+   * IDENTITY BOUNDARY rather than a label: Micromart's 3002 and 3005 hold
+   * different people on the same phone numbers, so if this ever reports a
+   * long-standing borrower as new, this field is the first thing to check.
+   */
+  entityId?: number;
+  message?: string;
+}
+
+/** Needs the verified session — the phone is read from the cookie, not sent. */
+export const enrolment = (nationalId: string) =>
+  apiFetch<Enrolment>(
+    "/api/portal/enrolment",
+    { method: "POST", body: who(nationalId) },
+    { auth: true, idempotent: true },
   );
 
 // ── The shelf ────────────────────────────────────────────────────────────────
