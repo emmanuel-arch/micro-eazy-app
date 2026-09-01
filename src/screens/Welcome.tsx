@@ -64,11 +64,23 @@ export default function Welcome() {
           photographs below are doing the work that a gradient does elsewhere. */}
       <header className="sky aurora relative overflow-hidden rounded-b-[28px] px-5 pb-10 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-b-[32px]">
         <div className="relative z-10 flex items-center gap-3 py-2">
+          {/* The ACTUAL icon that is about to land on the home screen, on the
+              white chip — the same treatment the app it replaces uses on this
+              exact screen. A translucent white plate would let the navy band
+              show through a mark that is itself navy, and the M would vanish
+              into it. Solid white is what a launcher gives it anyway. */}
           <span
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[16px] font-black text-white"
-            style={{ background: "rgb(255 255 255 / 0.14)", boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.28)" }}
+            className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white"
+            style={{ boxShadow: "0 10px 24px -10px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.28)" }}
           >
-            M
+            <img
+              src="/brand/micro-eazy/icon-192.png"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 object-contain"
+              aria-hidden="true"
+            />
           </span>
           <span className="min-w-0 flex-1 leading-none">
             <span className="block text-[16px] font-bold tracking-[-0.02em] text-sky-ink">Micro Eazy</span>

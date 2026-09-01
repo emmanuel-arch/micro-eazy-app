@@ -16,6 +16,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
+    <!-- ── THE INSTALLED NAME IS EXACTLY "Micro Eazy" ────────────────────────
+         The manifest's name and short_name already say so, and that is what
+         Android reads. iOS does not: Safari names a home-screen shortcut from
+         THIS tag, and falls back to the <title> when it is absent. The title
+         above carries the tagline for the browser tab and for search, so
+         without this line an iPhone would label the icon "Micro Eazy — Quick
+         loans. Bet…" — a truncated sentence under an app icon.
+
+         Keep this in step with the manifest short_name in vite.config.ts. -->
+    <meta name="apple-mobile-web-app-title" content="Micro Eazy" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

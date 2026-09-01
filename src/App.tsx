@@ -27,11 +27,32 @@ import Exposure from "./screens/Exposure";
 function Wordmark() {
   return (
     <div className="flex items-center gap-2.5 px-2 py-1">
+      {/* ── THE REAL MARK, not a letter in a box ─────────────────────────
+          The same file the manifest installs to the home screen and the same
+          one the app it replaces uses, so the icon a customer taps and the
+          mark at the top of the app are one image rather than two things that
+          merely resemble each other.
+
+          ON A WHITE CHIP, which is the rule the previous app already settled
+          (see pwa/src/components/eco/EazyLoader.jsx — "the app icon, on the
+          white chip"). The mark is navy and green on transparency, so in dark
+          mode its navy half would sink into a near-black rail and the logo
+          would read as a green smear. The chip is also how the icon actually
+          appears on a launcher, so this is what the customer already knows. */}
       <span
-        className="grid h-9 w-9 place-items-center rounded-xl text-[15px] font-black text-white"
-        style={{ background: "var(--sky)", boxShadow: "0 6px 18px -8px var(--navy)" }}
+        className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-white"
+        style={{ boxShadow: "0 6px 18px -8px var(--navy)" }}
       >
-        M
+        <img
+          src="/brand/micro-eazy/icon-192.png"
+          alt=""
+          width={36}
+          height={36}
+          className="h-9 w-9 object-contain"
+          // Decorative: the wordmark beside it already says "Micro Eazy", and a
+          // screen reader announcing the name twice is noise.
+          aria-hidden="true"
+        />
       </span>
       <span className="leading-none">
         <span className="block text-[15px] font-bold tracking-[-0.02em]">Micro Eazy</span>
