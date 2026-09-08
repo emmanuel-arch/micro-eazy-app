@@ -30,8 +30,20 @@
 import { apiFetch } from "../net/transport";
 import type { Product } from "../quote";
 
+// ── THE SLUG, AND WHY `??` WAS THE WRONG OPERATOR ───────────────────────────
+// This read `import.meta.env.VITE_LENDER_SLUG ?? "micromart"`, and the build
+// running on portal.servicesuitecloud.com today ships `lenderSlug: ""` on every
+// call. `??` only catches null and undefined. Vite inlines an env var that is
+// SET BUT EMPTY as the empty string, so `"" ?? "micromart"` is `""` — the
+// fallback never fires, and the suite answers 400 "Choose a lender" to a
+// customer who did nothing wrong.
+//
+// `||` catches the empty string too, and .trim() catches the whitespace-only
+// value that a dashboard text field quietly produces. Both are needed: the bug
+// is not in the default, it is in which values reach it.
 /** Which lender's book this app is standing in. One build, many lenders. */
-export const LENDER_SLUG = import.meta.env.VITE_LENDER_SLUG ?? "micromart";
+export const LENDER_SLUG =
+  (import.meta.env.VITE_LENDER_SLUG ?? "").trim() || "micromart";
 
 /** Every /api/portal route takes the slug and the ID in the body. */
 const who = (nationalId: string) => JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId });
