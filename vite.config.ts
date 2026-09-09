@@ -68,7 +68,40 @@ export default defineConfig(({ mode }) => {
         lang: "en",
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
+        // ── WHAT IS PRECACHED, AND WHAT IS DELIBERATELY NOT ─────────────────
+        // Precache means DOWNLOADED ON INSTALL, before the customer has asked
+        // for any of it. That is exactly right for the shell — the JS, the CSS,
+        // the icons — because the whole point of installing is that the app
+        // opens offline and instantly.
+        //
+        // It is exactly wrong for photography. The moment the wallpapers, the
+        // twelve picker thumbnails, the illustration slots and the front-door
+        // plates landed in public/, this pattern quietly took the install from
+        // ~700 KB to 6.4 MB: every customer paying to download twelve wallpapers
+        // they have not chosen, eleven illustrations they may never reach, and
+        // eight portraits of which they see one. On the connections this app is
+        // used on that is the difference between an install and an abandonment.
+        //
+        // So the shell is precached and the pictures are not. They are cached
+        // ON USE instead, by the runtime rule below — which means the wallpaper
+        // somebody actually chose IS available offline, and the eleven they did
+        // not choose cost nothing. The `brand` exception is the mark itself:
+        // it is the splash screen, it is 40 KB, and it must be there before
+        // anything else is.
+        //
+        // The brand list is ENUMERATED rather than globbed, and that is worth a
+        // sentence because `brand/**/*.png` looked identical and cost 1.5 MB.
+        // public/brand also holds the founder's source exports — Micro-eazy.png
+        // at 1.08 MB, logo-transparent.png at 443 KB — which nothing in src/
+        // references and which every installing customer was therefore
+        // downloading for no reason at all. A glob precaches what is in the
+        // folder; a list precaches what the app asks for. Add a line when a new
+        // mark is genuinely used, and run `npm run build` to see the number
+        // move.
+        globPatterns: [
+          "**/*.{js,css,html,ico,svg}",
+          "brand/micro-eazy/{favicon-32,favicon-64,apple-touch-icon,icon-192,icon-512,icon-maskable-512,logo-mark}.png",
+        ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // The three that make a deploy actually land: install the new worker,
         // activate it immediately, take over already-open pages, and delete the
@@ -89,6 +122,30 @@ export default defineConfig(({ mode }) => {
         // as JSON. The API is not a navigation and must always reach network.
         navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/api\//],
+        // ── PHOTOGRAPHY IS CACHED ON USE, NOT ON INSTALL ────────────────────
+        // The other half of the globPatterns decision above. Cache-first,
+        // because these files are immutable: scripts/media.mjs writes
+        // /wallpapers/savannah.webp and that path only ever holds that picture.
+        // So the second time a customer opens the app their chosen wallpaper is
+        // instant and offline, and the ones they never chose were never fetched.
+        //
+        // The cap is what stops this becoming the problem it just solved. 40
+        // entries is generous — a wallpaper, its thumbnail, the illustrations of
+        // the screens they actually use — and 60 days is longer than the gap
+        // between visits for anyone still using the product. Beyond that,
+        // workbox evicts the oldest rather than letting the origin fill up and
+        // get thrown out wholesale by the browser mid-session.
+        runtimeCaching: [
+          {
+            urlPattern: /\/(wallpapers|art|images)\/.*\.(?:webp|png|jpg|jpeg|svg)$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "me-media-v1",
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

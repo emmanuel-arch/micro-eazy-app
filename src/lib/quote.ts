@@ -207,3 +207,84 @@ export function affordableRange(p: Product, limit: number): { min: number; max: 
   if (max < p.minPrincipal) return null;
   return { min: p.minPrincipal, max };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A QUOTE, IN THE SHAPE OF AN OFFER.
+//
+// The agreement screen was written against `Offer` — the LoanOffer a lender
+// CREATES AFTER an application has been decided — and defaulted to a sample one.
+// That default hid a sequencing problem rather than a wiring gap: at the point
+// the customer reads their agreement in the onboarding funnel, no LoanOffer
+// exists on any server, because they have not applied yet. There was nothing to
+// fetch, and `getOffer(id)` would have had no id to fetch it with.
+//
+// So the pre-application agreement is built from the QUOTE the customer just
+// assembled — the same arithmetic in this file that scripts/test-quote.mjs
+// checks against the server's own, so the figures on the agreement are the
+// figures the server will price.
+//
+// ── THE EMPTY ID IS THE SIGNAL, AND IT IS LOAD-BEARING ──────────────────────
+// `id: ""` means "this is a pre-contract disclosure, not a signed offer". The
+// agreement screen keys its whole ceremony off it: with no offer id there is
+// nothing to send a signing code FOR and nothing to sign, so agreeing means
+// "apply on these terms" and consent is recorded by the apply call. Rendering a
+// signing-code flow against an offer that does not exist would ask somebody for
+// a code that could never arrive.
+// ─────────────────────────────────────────────────────────────────────────────
+import type { Offer } from "./api/portal";
+
+export function quoteToOffer(q: Quote, lender: string): Offer {
+  const charges = (q.product.charges ?? []).map((c) => ({ ...c }));
+  return {
+    // Empty ON PURPOSE. See the header.
+    id: "",
+    status: "OFFERED",
+    lender,
+    productName: q.product.name,
+    principal: q.principal,
+    // The agreement shows the WHOLE-TERM rate, because that is what a customer
+    // is agreeing to pay in total — "8.25% a week" and "82.5% over ten weeks"
+    // are the same price and only one of them reads as the real cost.
+    interestRate: wholeTermRate(q.product),
+    interestMethod: q.method,
+    termCount: q.periods,
+    termUnit: q.unit,
+    totalInterest: q.totalInterest,
+    totalRepayable: q.totalRepayable,
+    firstDueDate: q.firstDueDate,
+    expectedClearDate: q.clearDate,
+    // A quote does not expire — it is recomputed on every render. Null rather
+    // than an invented deadline, which would be a pressure tactic dressed as
+    // a fact.
+    expiresAt: null,
+    acceptedAt: null,
+    // ── THE PRINCIPAL/INTEREST SPLIT IS DERIVED, NOT CARRIED ────────────────
+    // A schedule Row holds only `cents` — the total for that period — because
+    // the reshape editor moves TOTALS between weeks and has no opinion about
+    // what part of each is interest. So the split is apportioned by each row's
+    // share of the whole, which is exact in aggregate and is the only defensible
+    // answer once a customer has reshaped the plan: on a flat loan every row
+    // carries the same ratio anyway, and on a reshaped one there is no other
+    // meaning for "the interest in THIS week".
+    schedule: q.rows.map((r, i) => {
+      const amountDue = r.cents / 100;
+      const share = q.totalRepayable > 0 ? amountDue / q.totalRepayable : 0;
+      const interestDue = Math.round(q.totalInterest * share * 100) / 100;
+      return {
+        seq: r.seq ?? i + 1,
+        dueDate: r.dueDate,
+        amountDue,
+        principalDue: Math.round((amountDue - interestDue) * 100) / 100,
+        interestDue,
+      };
+    }),
+    payEarly: {
+      savingKes: 0,
+      applies: q.earlySettlementApplies,
+      note: q.earlySettlementApplies
+        ? "This loan charges interest on the reducing balance, so settling early costs you less."
+        : "This loan charges flat interest, so settling early does not reduce what you owe.",
+    },
+    charges,
+  };
+}

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// THE FOUR PLATES ON THE FRONT DOOR.
+// THE PLATES ON THE FRONT DOOR.
 //
 // Kenya, on the half of the sign-in screen that is not the form. These are the
 // people who actually borrow here: a mama mboga, a fundi, a duka owner, a boda
@@ -81,5 +81,53 @@ export const VOICES: Voice[] = [
     body: "M-Pesa STK, standing orders, and a statement you can actually read.",
     caption: "A boda stage at dusk",
     alt: "A Kenyan boda boda rider pausing beside his motorcycle at dusk.",
+  },
+
+  // ── THE SECOND FOUR ─────────────────────────────────────────────────────
+  // The deck was built for four and shuffles through however many are here, so
+  // this is data rather than a change to the component.
+  //
+  // WHY MORE AT ALL: four plates on a five-second rotation is a twenty-second
+  // loop, and the front door is a screen people sit in front of for longer than
+  // that — twice, if the first password attempt fails. A visible loop turns a
+  // photograph into a slideshow, which is the register this panel exists to
+  // avoid. Eight is forty seconds and reads as a stack rather than a cycle.
+  //
+  // And the trades are chosen, not collected: a tailor, a farmer, a salon and a
+  // butcher are four more of the book, and between them the eight cover the
+  // actual spread of what Micromart lends against. Every promise below is one
+  // the product can be held to — see the note at the top of this file about why
+  // none of these is a testimonial.
+  {
+    id: "tailor",
+    file: "/images/login/ke-tailor.webp",
+    title: "Buy the fabric before the order, not after.",
+    body: "A limit that is there when the work is, so a deposit is never the thing that stops you.",
+    caption: "A tailor's workroom",
+    alt: "A Kenyan tailor guiding cloth through a sewing machine.",
+  },
+  {
+    id: "farmer",
+    file: "/images/login/ke-farmer.webp",
+    title: "Seed, fertiliser, labour — timed to the season.",
+    body: "Borrow when the ground is ready and repay when the crop sells.",
+    caption: "A smallholding at first light",
+    alt: "A Kenyan farmer working a smallholding in the early morning.",
+  },
+  {
+    id: "salon",
+    file: "/images/login/ke-salon.webp",
+    title: "Stock the chair, not just fill it.",
+    body: "Working capital for product and equipment, repaid in small pieces from takings.",
+    caption: "A salon, mid-appointment",
+    alt: "A Kenyan hairdresser working with a client in her salon.",
+  },
+  {
+    id: "butcher",
+    file: "/images/login/ke-butcher.webp",
+    title: "Buy the whole carcass at the better price.",
+    body: "Short-term credit sized to a day's trade, so buying in bulk is finally worth it.",
+    caption: "A butchery counter",
+    alt: "A Kenyan butcher preparing cuts behind the counter.",
   },
 ];

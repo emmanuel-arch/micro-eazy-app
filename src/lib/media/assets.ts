@@ -20,6 +20,8 @@
 // needs and the part that gets lost in a Slack thread.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { metaFor } from "./media.generated";
+
 export type Ratio = "square" | "wide" | "card" | "tall";
 
 export interface ArtSlot {
@@ -180,6 +182,36 @@ export const FILMS: Record<string, FilmSlot> = {
     blurb: "Ratiba, due dates, and what happens if you are late.",
     accent: "sky",
   },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHERE A SLOT'S PICTURE ACTUALLY COMES FROM.
+//
+// The header of this file used to promise that landing the photography would be
+// "one line changing here". It is now no lines: `src` stays null in every slot
+// above, and this function answers the question by asking whether the pipeline
+// has produced /art/<id>.webp.
+//
+// WHY THAT IS BETTER THAN A LINE PER SLOT. A manifest whose `src` fields have to
+// be edited by hand has two sources of truth — the field and the file — and they
+// drift in both directions: a slot pointed at a file nobody ever drew renders a
+// broken image on a screen asking for a national ID, and a file that was drawn
+// but never wired sits in public/ doing nothing while the composition stands in
+// for it. Both have happened. The generated media manifest already knows exactly
+// which files exist, because it is written by the script that encodes them, so
+// it is the only answer that cannot be stale.
+//
+// `src` is kept in the type for the case it is genuinely for: an override that
+// points a slot somewhere OTHER than its own name — a shared illustration, or a
+// second use of one photograph. It is checked first and it wins.
+//
+// Drop a file into public/art, run `npm run media`, and the slot lights up.
+// Delete it and the composition comes back. Neither is a code change.
+// ─────────────────────────────────────────────────────────────────────────────
+export const artSrc = (art: ArtSlot): string | null => {
+  if (art.src) return art.src;
+  const conventional = `/art/${art.id}.webp`;
+  return metaFor(conventional) ? conventional : null;
 };
 
 export const RATIO_CLASS: Record<Ratio, string> = {

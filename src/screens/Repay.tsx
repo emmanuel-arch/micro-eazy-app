@@ -39,8 +39,9 @@ import {
 import { Sky } from "../components/shell/Sky";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { Artwork } from "../components/media/Artwork";
-import type { MyLoanResponse, RatibaPlan } from "../lib/api/portal";
-import { SAMPLE_LOAN, SAMPLE_RATIBA_ACTIVE } from "../lib/api/samples";
+import { pay, type HomeResponse } from "../lib/api/portal";
+import { useSession } from "../lib/session";
+import { SAMPLE_HOME } from "../lib/api/samples";
 import { money, shortDate } from "../lib/format";
 
 type Choice = "instalment" | "balance" | "other";
@@ -51,23 +52,33 @@ type State = "idle" | "pushing" | "waiting" | "paid";
  *  with an unanswered prompt, and a spinner that outlives it is a lie. */
 const WATCH_SECONDS = 60;
 
+// ── ONE SOURCE, NOT TWO ─────────────────────────────────────────────────────
+// Repay used to take `MyLoanResponse` and a separate `RatibaPlan`. Both are
+// NATIVE-ONLY on the server — /api/portal/my-loan opens with
+// `if (org.mode !== "NATIVE") return { found: false, bridged: true }` and
+// /api/portal/standing-order answers `{ available: false }` — so on Micromart
+// this screen could never have shown a real loan or a real standing order, no
+// matter what it was handed.
+//
+// It now reads the same /api/portal/home the front screen does, which resolves
+// the book from whichever side actually holds it. One call, one truth, and the
+// two screens cannot disagree about what somebody owes.
 export default function Repay({
-  /** Swap for `await myLoan(nationalId)`. */
-  data = SAMPLE_LOAN,
-  /** Swap for `await ratibaOffer(nationalId)`. */
-  ratiba = SAMPLE_RATIBA_ACTIVE,
+  data = SAMPLE_HOME,
   /** Lender configuration. Never guessed — see the header note. */
   payBill = null,
 }: {
-  data?: MyLoanResponse;
-  ratiba?: RatibaPlan;
+  data?: HomeResponse;
   payBill?: string | null;
 }) {
   const loan = data.activeLoan ?? null;
+  const ratiba = data.ratiba;
   const [choice, setChoice] = useState<Choice>("instalment");
   const [other, setOther] = useState("");
   const [state, setState] = useState<State>("idle");
   const [elapsed, setElapsed] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const { nationalId } = useSession();
 
   // The counter that keeps somebody from pressing the button a second time.
   // It also gives the wiring its shape: each tick is where myLoan() is
@@ -83,7 +94,7 @@ export default function Repay({
   const instalment = loan.nextDue?.amount ?? 0;
   const custom = Math.max(0, Number(other.replace(/[^\d.]/g, "")) || 0);
   const amount = choice === "instalment" ? instalment : choice === "balance" ? loan.balance : custom;
-  const ratibaOn = ratiba.existing?.status === "ACTIVE" || ratiba.existing?.status === "PENDING";
+  const ratibaOn = ratiba.active;
   const payable = amount > 0 && amount <= loan.balance;
 
   if (state === "paid") {
@@ -251,11 +262,29 @@ export default function Repay({
                   trailingIcon={ArrowRight}
                   disabled={!payable}
                   onClick={() => {
+                    if (state !== "idle") return; // never a second push
                     setState("pushing");
                     setElapsed(0);
-                    // WIRING: pay(nationalId, amount). Non-idempotent by
-                    // declaration — one call, one push, no failover, no retry.
-                    setTimeout(() => setState("waiting"), 900);
+                    setError(null);
+                    // ── ONE CALL, ONE PUSH ───────────────────────────────
+                    // pay() declares itself non-idempotent in portal.ts, so the
+                    // transport will not fail it over and will not retry it. A
+                    // timeout here is NOT evidence that nothing happened — the
+                    // prompt may already be on the handset — which is why the
+                    // failure path below moves to `waiting` rather than back to
+                    // `idle` with the button live again.
+                    pay(nationalId ?? "", amount)
+                      .then(() => setState("waiting"))
+                      .catch((e: unknown) => {
+                        const msg =
+                          e instanceof Error && e.message ? e.message : "We could not raise the prompt.";
+                        // A refusal the server actually answered (a shadowed
+                        // channel, an expired lender session, too small an
+                        // amount) is a fact, and the customer can act on it. Go
+                        // back to idle so they can.
+                        setError(msg);
+                        setState("idle");
+                      });
                   }}
                 >
                   {payable
@@ -264,6 +293,11 @@ export default function Repay({
                       ? "That is more than you owe"
                       : "Enter an amount"}
                 </LiquidButton>
+                {error && (
+                  <p className="mt-2.5 text-[12px] font-semibold" style={{ color: "#dc2626" }}>
+                    {error}
+                  </p>
+                )}
                 <p className="mt-2.5 flex items-start gap-2 text-[11px] leading-snug text-ink-faint">
                   <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" style={{ color: "var(--green-ink)" }} />
                   The prompt goes to your registered M-PESA number. We cannot send it anywhere else, and we never see
@@ -307,14 +341,15 @@ export default function Repay({
               <>
                 <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
                   Safaricom collects{" "}
-                  <strong className="tnum font-semibold text-ink">{money(ratiba.existing?.amount ?? 0)}</strong>{" "}
-                  {ratiba.frequencyLabel ?? ""} until the loan clears. You do not need to do anything on those days.
+                  <strong className="tnum font-semibold text-ink">{money(ratiba.amount ?? 0)}</strong>{" "}
+                  {(ratiba.frequency ?? "").toLowerCase()} until the loan clears. You do not need to do anything on
+                  those days.
                 </p>
                 <button className="mt-3 text-[12.5px] font-semibold underline text-ink-faint">
                   Stop auto-repay
                 </button>
               </>
-            ) : (
+            ) : ratiba.available ? (
               <>
                 <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
                   Let Safaricom move each instalment on its due date, so a missed payment is never just a forgotten
@@ -328,6 +363,17 @@ export default function Repay({
                   Turn on auto-repay
                 </LiquidButton>
               </>
+            ) : (
+              // ── A SWITCH THAT WOULD DO NOTHING IS WORSE THAN NO SWITCH ────
+              // Ratiba debits into OUR books, so it is meaningless on a lender
+              // whose book is their own — /api/portal/standing-order answers
+              // `available: false` for exactly this reason. Offering the button
+              // anyway gives somebody a control they tap, believe is on, and
+              // then rely on for a payment that never gets collected.
+              <p className="mt-3 text-[12.5px] leading-relaxed text-ink-faint">
+                {data.lender} does not offer automatic collection through this app yet. Set a reminder for your due
+                date and pay here or by paybill.
+              </p>
             )}
           </section>
 

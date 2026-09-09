@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// THE VOICES PANEL — four photographs, stacked, shuffling.
+// THE VOICES PANEL — eight photographs, stacked, shuffling.
 //
 // The mechanic is the reference library's testimonial stack, kept because it is
 // the right one for four pictures that have to share a slot: they sit as a
@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { VOICES } from "../../lib/media/voices";
+import { metaFor } from "../../lib/media/media.generated";
 
 /**
  * A stable scatter. The same card is at the same angle tomorrow as today.
@@ -134,7 +135,25 @@ export function Voices({
                 cover ? "inset-0" : "inset-3 rounded-[26px]"
               }`}
               style={{
-                background: "linear-gradient(150deg, var(--navy) 0%, var(--navy-deep) 46%, var(--green) 190%)",
+                // THE BLUR UNDER THE PLATE, then the brand gradient under that.
+                //
+                // The gradient alone was the right fallback when a plate might
+                // never arrive; it is the wrong one for the half-second while
+                // one is arriving, because a navy-to-green wash and a
+                // photograph of a market look nothing alike and the swap is a
+                // visible flash on the first screen of the product.
+                //
+                // The blur is a ~20px WebP inlined at build time
+                // (lib/media/media.generated.ts) — no request, so it is on
+                // screen in the first frame and the deck is never empty. The
+                // gradient stays underneath as the answer for a plate that is
+                // genuinely missing.
+                background: [
+                  metaFor(v.file) ? `url('${metaFor(v.file)!.lqip}') center/cover no-repeat` : null,
+                  "linear-gradient(150deg, var(--navy) 0%, var(--navy-deep) 46%, var(--green) 190%)",
+                ]
+                  .filter(Boolean)
+                  .join(", "),
                 boxShadow: cover ? undefined : "var(--shadow-lift)",
                 // Not zero. The cards underneath were invisible at rest, which
                 // made this a slideshow that happened to rotate on the way out —

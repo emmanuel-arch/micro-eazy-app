@@ -30,44 +30,56 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Bell, Menu, X } from "lucide-react";
-import { NAV_ITEMS } from "../nav/GlowNav";
+import { NAV_GROUPS } from "../nav/GlowNav";
 import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { IdentityMenu } from "./IdentityMenu";
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <div className="space-y-0.5 px-2">
-      {NAV_ITEMS.map((item) => {
-        const Icon = item.icon;
-        return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors ${
-                isActive ? "text-white shadow-sm" : "text-ink-soft hover:bg-surface-sunk hover:text-ink"
-              }`
-            }
-            // The active fill is the brand, exactly as the console does it —
-            // one saturated bar in a column of quiet type.
-            style={({ isActive }) => (isActive ? { backgroundColor: "var(--navy)" } : undefined)}
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  className={`h-4 w-4 shrink-0 ${isActive ? "" : "text-ink-faint group-hover:text-ink-soft"}`}
-                  strokeWidth={2.2}
-                  aria-hidden
-                />
-                <span className="truncate">{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        );
-      })}
+    // ── GROUPED, BECAUSE TEN FLAT LINKS IS A LIST AND NOT A MAP ─────────────
+    // The sidebar now carries the whole app rather than the five that fit a
+    // thumb bar (see nav/GlowNav.tsx for why those became two lists). Ten
+    // undifferentiated rows is worse than five — the eye has nothing to land
+    // on. Four short headings turn it back into somewhere with rooms.
+    <div className="space-y-4">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className="space-y-0.5 px-2">
+          <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-ink-faint">
+            {group.label}
+          </p>
+          {group.items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors ${
+                    isActive ? "text-white shadow-sm" : "text-ink-soft hover:bg-surface-sunk hover:text-ink"
+                  }`
+                }
+                // The active fill is the brand, exactly as the console does it —
+                // one saturated bar in a column of quiet type.
+                style={({ isActive }) => (isActive ? { backgroundColor: "var(--navy)" } : undefined)}
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon
+                      className={`h-4 w-4 shrink-0 ${isActive ? "" : "text-ink-faint group-hover:text-ink-soft"}`}
+                      strokeWidth={2.2}
+                      aria-hidden
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

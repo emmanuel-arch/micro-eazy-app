@@ -41,7 +41,7 @@ import {
   AlertTriangle, ArrowRight, Check, Clock, FileText, Info, MessageSquareText, ShieldCheck, TrendingDown, X,
 } from "lucide-react";
 import { LiquidButton } from "../../components/ui/LiquidButton";
-import type { Offer } from "../../lib/api/portal";
+import { sendSigningCode, signOffer, type Offer } from "../../lib/api/portal";
 import { SAMPLE_OFFER } from "../../lib/api/samples";
 import { exact, longDate, money, periodCount, shortDate } from "../../lib/format";
 import { sum, toCents, type Row } from "../../lib/schedule/reshape";
@@ -92,28 +92,55 @@ export default function LoanAgreement({
 
   const signable = offer.status === "OFFERED";
 
+  // ── TWO DOCUMENTS WEAR THE SAME SHAPE ─────────────────────────────────────
+  // An empty `id` means this is a PRE-CONTRACT DISCLOSURE built from the
+  // customer's own quote (lib/quote.ts → quoteToOffer), not a LoanOffer the
+  // lender has issued. At this point in the funnel no offer exists on any
+  // server — one is created after an application is decided — so there is
+  // nothing to send a signing code FOR and nothing to sign.
+  //
+  // Asking for a six-digit code here would ask somebody to type a code that
+  // could never arrive. Agreeing means "apply on these terms", and the consent
+  // is recorded by the apply call at the end of the funnel.
+  const isQuote = !offer.id;
+
   async function requestCode() {
+    if (isQuote) {
+      // Nothing to sign yet — agreeing IS the action.
+      setState("signed");
+      onDone?.(offer);
+      return;
+    }
     setError(null);
     setState("sending");
-    // WIRING: sendSigningCode(offer.id). Held back with the rest of the
-    // authenticated surface until the app has a sign-in screen — the flow, its
-    // states and its failure text are all real, and the call is one line.
-    await new Promise((r) => setTimeout(r, 700));
-    setState("codeSent");
+    try {
+      // A second code invalidates the first, so the one the customer is holding
+      // becomes wrong. Declared non-idempotent in portal.ts and never retried.
+      await sendSigningCode(offer.id);
+      setState("codeSent");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "We could not send the code. Try again.");
+      setState("reading");
+    }
   }
 
   async function submitCode() {
     setError(null);
-    setState("signing");
-    // WIRING: signOffer(offer.id, code) — never retried; a code is consumed on use.
-    await new Promise((r) => setTimeout(r, 900));
     if (code.trim().length !== 6) {
       setError("That code is not six digits. Check the SMS and try again.");
-      setState("codeSent");
       return;
     }
-    setState("signed");
-    onDone?.(offer);
+    setState("signing");
+    try {
+      // Never retried: a code is consumed on use, so a second attempt with the
+      // same digits fails and a silent retry would burn the customer's code.
+      await signOffer(offer.id, code.trim());
+      setState("signed");
+      onDone?.(offer);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "That code was not accepted.");
+      setState("codeSent");
+    }
   }
 
   if (state === "declined") {

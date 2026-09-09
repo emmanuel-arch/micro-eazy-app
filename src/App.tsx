@@ -16,13 +16,14 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import type { ReactNode } from "react";
 import { GlowTabs } from "./components/nav/GlowNav";
 import { AppShell } from "./components/shell/AppShell";
+import { Wallpaper } from "./components/shell/Wallpaper";
 import { ThemeProvider } from "./lib/theme";
 import { SessionProvider, useSession } from "./lib/session";
 import SignIn from "./screens/SignIn";
 import SignInPassword from "./screens/SignInPassword";
 import { Splash, useSplashFloor } from "./components/shell/Splash";
 import { Resource } from "./components/data/Resource";
-import { exposure, ladder, whyThisDecision } from "./lib/api/portal";
+import { exposure, home, ladder, track, whyThisDecision } from "./lib/api/portal";
 import Home from "./screens/Home";
 import Placeholder from "./screens/Placeholder";
 import Onboarding from "./screens/onboarding/Onboarding";
@@ -31,6 +32,11 @@ import Repay from "./screens/Repay";
 import WhyThisDecision from "./screens/WhyThisDecision";
 import Ladder from "./screens/Ladder";
 import Exposure from "./screens/Exposure";
+import Messages from "./screens/Messages";
+import Thread from "./screens/Thread";
+import Track from "./screens/Track";
+import Identity from "./screens/Identity";
+import You from "./screens/You";
 
 /** The signed-in frame is AppShell now — the console's sidebar-to-the-top-edge
  *  layout, with the mark at the head of its own navigation. The old GlowRail and
@@ -143,6 +149,12 @@ function Shell() {
 
   return (
     <div className="min-h-full">
+      {/* The floor. Fixed, behind everything, and painted in ONE place — see
+          components/shell/Wallpaper.tsx. It renders on every screen including
+          the public doors, because a customer who has dressed the app should
+          find it dressed the next time they sign in, not only once they are
+          past the gate. */}
+      <Wallpaper />
       {booting && <Splash />}
 
       <Frame chrome={chrome} bleed={bleed}>
@@ -158,14 +170,53 @@ function Shell() {
                 identical — see screens/SignInPassword.tsx. */}
             <Route path="/signin" element={<SignInPassword />} />
 
-            <Route path="/" element={<RequireSession><Home /></RequireSession>} />
+            {/* Home reads ONE endpoint, not four. It asks what can I borrow,
+                what do I owe, has anyone told me anything, and is anything of
+                mine in flight — and four round trips on the screen the app is
+                judged on in four seconds is the difference between instant and
+                assembling itself while somebody watches. */}
+            <Route
+              path="/"
+              element={
+                <RequireSession>
+                  <Resource
+                    title="Home"
+                    load={home}
+                    emptyWhen={(d) =>
+                      !d.found
+                        ? "We have no account on file for this ID yet. Finish signing up and your limit appears here."
+                        : null
+                    }
+                  >
+                    {(d) => <Home data={d} />}
+                  </Resource>
+                </RequireSession>
+              }
+            />
             {/* Onboarding is gated too. A person reaches it only after a code
                 has been verified AND the enrolment check has said they are not
                 already a customer — walking somebody through KYC they finished
                 last year is how you lose them, and doing it because a lookup
                 failed is how you open a second account against a live one. */}
             <Route path="/join" element={<RequireSession><Onboarding /></RequireSession>} />
-            <Route path="/repay" element={<RequireSession><Repay /></RequireSession>} />
+            {/* The SAME endpoint Home reads. One call, one truth — the two
+                screens cannot disagree about what somebody owes. */}
+            <Route
+              path="/repay"
+              element={
+                <RequireSession>
+                  <Resource
+                    title="Repay"
+                    load={home}
+                    emptyWhen={(d) =>
+                      !d.found ? "We have no account on file for this ID yet." : null
+                    }
+                  >
+                    {(d) => <Repay data={d} />}
+                  </Resource>
+                </RequireSession>
+              }
+            />
             {/* The Score tab opens on the DECISION, not on a dial. A number
                 without its reasons is the thing customers ring up about, and
                 the ladder and the credit file hang off it as the two questions
@@ -229,8 +280,45 @@ function Shell() {
                 </RequireSession>
               }
             />
+            {/* ── The transparency pair ──────────────────────────────────
+                /track is the customer's view of the SAME workflow chain the
+                officer is working — resolved once on the server so the two
+                cannot drift. /messages is the channel that makes it actionable:
+                a stage bar showing "Sent back for review" with no way to ask
+                what is needed names a wall without a door. */}
+            <Route
+              path="/track"
+              element={
+                <RequireSession>
+                  <Resource
+                    title="Your application"
+                    load={track}
+                    emptyWhen={(d) =>
+                      !d.found
+                        ? "We have no account on file for this ID yet. Once you apply, every stage your application passes through appears here."
+                        : null
+                    }
+                  >
+                    {(d) => <Track data={d} />}
+                  </Resource>
+                </RequireSession>
+              }
+            />
+            {/* Both message routes are the same screen — see screens/Thread.tsx.
+                "new" is a composer with no thread yet, and the first send
+                creates one. */}
+            <Route path="/messages" element={<RequireSession><Messages /></RequireSession>} />
+            <Route path="/messages/:threadId" element={<RequireSession><Thread /></RequireSession>} />
+
+            {/* The screen a REFERRED customer opens. It is the far end of every
+                automated identity decision: what the machine was unsure about,
+                in words about the photograph, and either a retake or a person —
+                never both offered as equals, and never "try again" against a
+                registry miss, which is a loop with no exit. */}
+            <Route path="/identity" element={<RequireSession><Identity /></RequireSession>} />
+
             <Route path="/loans" element={<RequireSession><Placeholder title="Your loans" /></RequireSession>} />
-            <Route path="/you" element={<RequireSession><Placeholder title="You" /></RequireSession>} />
+            <Route path="/you" element={<RequireSession><You /></RequireSession>} />
             <Route path="*" element={<Placeholder title="Not found" />} />
           </Routes>
       </Frame>

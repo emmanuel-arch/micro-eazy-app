@@ -56,6 +56,30 @@
           document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
           var m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute("content", dark ? "#04060e" : "#012863");
+
+          // ── THE WALLPAPER, PRELOADED BEFORE REACT EXISTS ────────────────
+          // Only the ONE the customer actually chose, and only when they have
+          // chosen one — the default is no picture at all, which costs nothing
+          // and is the state most people are in.
+          //
+          // This is a `preload` hint rather than a paint: the floor itself is
+          // drawn by components/shell/Wallpaper.tsx, which ladders through the
+          // inlined blur first and never flashes. What the hint buys is the
+          // request STARTING here, in <head>, instead of after the bundle has
+          // parsed and mounted — which on a handset is most of a second, and it
+          // is the difference between a floor that fades in during the splash
+          // and one that fades in after somebody is already reading.
+          //
+          // Keep "me.wallpaper" in step with lib/wallpaper.ts.
+          var wp = localStorage.getItem("me.wallpaper");
+          if (wp && wp !== "none" && /^[a-z0-9-]+$/.test(wp)) {
+            var l = document.createElement("link");
+            l.rel = "preload";
+            l.as = "image";
+            l.href = "/wallpapers/" + wp + ".webp";
+            l.fetchPriority = "low";
+            document.head.appendChild(l);
+          }
         } catch (e) {
           document.documentElement.setAttribute("data-theme", "light");
         }

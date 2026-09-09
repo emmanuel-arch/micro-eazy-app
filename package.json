@@ -9,6 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "media": "node scripts/media.mjs --write",
+    "media:report": "node scripts/media.mjs",
+    "media:check": "node scripts/media.mjs --check",
+    "media:archive": "node scripts/media.mjs --write --archive",
     "test:schedule": "node scripts/test-schedule.mjs",
     "test:quote": "node scripts/test-quote.mjs",
     "test": "npm run test:schedule && npm run test:quote"
@@ -26,6 +30,7 @@
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.1.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",

@@ -15,7 +15,8 @@
 // Everything is drawn from tokens, so a composition is correct in both themes
 // without a second palette and without a single hex at the call site.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ACCENT_STOPS, ART, RATIO_CLASS, type Ratio } from "../../lib/media/assets";
+import { ACCENT_STOPS, ART, RATIO_CLASS, artSrc, type Ratio } from "../../lib/media/assets";
+import { ProgressiveImage } from "./ProgressiveImage";
 
 /** A tiny, stable string hash. Not cryptographic — it only has to be the same
  *  number tomorrow as it is today, so a tile does not reshuffle on reload. */
@@ -60,14 +61,20 @@ export function Artwork({
   const ratio = ratioOverride ?? art.ratio;
   const [from, to] = ACCENT_STOPS[art.accent];
 
-  if (art.src) {
+  // Whether this slot has a photograph is decided by what the media pipeline
+  // produced, not by a field somebody remembered to edit — see artSrc().
+  const src = artSrc(art);
+  if (src) {
     return (
-      <img
-        src={art.src}
+      <ProgressiveImage
+        src={src}
         alt={art.alt}
-        loading="lazy"
-        decoding="async"
-        className={`${RATIO_CLASS[ratio]} ${rounded} w-full object-cover ${className}`}
+        // The ladder — dominant colour, inlined blur, then the photograph on
+        // decode — matters more here than anywhere else in the app. These sit
+        // inside cards with text beside them, and an image that pops in at full
+        // opacity after the copy has been read is the single most common way a
+        // finished screen comes to feel unfinished.
+        className={`${RATIO_CLASS[ratio]} ${rounded} w-full ${className}`}
       />
     );
   }

@@ -20,7 +20,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
-import { Home, Wallet, Gauge, FileText, User, type LucideIcon } from "lucide-react";
+import {
+  Home, Wallet, Gauge, FileText, User, MessageSquare, Route as RouteIcon,
+  TrendingUp, ShieldCheck, ScanFace, type LucideIcon,
+} from "lucide-react";
 
 export interface NavItem {
   icon: LucideIcon;
@@ -32,13 +35,61 @@ export interface NavItem {
   tint: string;
 }
 
-export const NAV_ITEMS: NavItem[] = [
-  { icon: Home, label: "Home", to: "/", glow: "rgba(47,107,255,0.42)", tint: "#5b8cff" },
-  { icon: Wallet, label: "Repay", to: "/repay", glow: "rgba(37,149,12,0.42)", tint: "#5ec22a" },
-  { icon: Gauge, label: "Score", to: "/score", glow: "rgba(245,158,11,0.42)", tint: "#f0a92b" },
-  { icon: FileText, label: "Loans", to: "/loans", glow: "rgba(139,92,246,0.42)", tint: "#a78bfa" },
-  { icon: User, label: "You", to: "/you", glow: "rgba(236,72,153,0.42)", tint: "#f472b6" },
+/** A heading in the sidebar. Groups are for the RAIL only — a bottom tab bar has
+ *  no room for section labels and does not need them at five items. */
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+// ── ONE LIST WAS DOING TWO JOBS ─────────────────────────────────────────────
+// NAV_ITEMS was five entries rendered into BOTH the bottom tab bar and the
+// desktop sidebar, which meant the sidebar could only ever be as big as a thumb
+// bar. Two consequences, and the second was the expensive one:
+//
+//   · A lending app's sidebar read as a demo. Five links is what a prototype
+//     has; a customer's real relationship with a lender has more rooms than
+//     that, and hiding them behind Home does not make them fewer.
+//   · /ladder and /exposure were ROUTED AND FINISHED but appeared in no
+//     navigation at all. Two complete screens, reachable only by typing the
+//     URL. That is not a small oversight — it is two features the lender paid
+//     for and no customer could find.
+//
+// So the two surfaces are now two lists. The rail carries the whole app,
+// grouped. The tab bar carries the five a thumb actually goes to.
+
+const HOME: NavItem = { icon: Home, label: "Home", to: "/", glow: "rgba(47,107,255,0.42)", tint: "#5b8cff" };
+const TRACK: NavItem = { icon: RouteIcon, label: "Application", to: "/track", glow: "rgba(37,149,12,0.42)", tint: "#5ec22a" };
+const MESSAGES: NavItem = { icon: MessageSquare, label: "Messages", to: "/messages", glow: "rgba(14,165,233,0.42)", tint: "#38bdf8" };
+const REPAY: NavItem = { icon: Wallet, label: "Repay", to: "/repay", glow: "rgba(37,149,12,0.42)", tint: "#5ec22a" };
+const LOANS: NavItem = { icon: FileText, label: "Your loans", to: "/loans", glow: "rgba(139,92,246,0.42)", tint: "#a78bfa" };
+const SCORE: NavItem = { icon: Gauge, label: "Your score", to: "/score", glow: "rgba(245,158,11,0.42)", tint: "#f0a92b" };
+const LADDER: NavItem = { icon: TrendingUp, label: "Limit ladder", to: "/ladder", glow: "rgba(245,158,11,0.42)", tint: "#f0a92b" };
+const EXPOSURE: NavItem = { icon: ShieldCheck, label: "Credit file", to: "/exposure", glow: "rgba(99,102,241,0.42)", tint: "#818cf8" };
+const IDENTITY: NavItem = { icon: ScanFace, label: "ID check", to: "/identity", glow: "rgba(99,102,241,0.42)", tint: "#818cf8" };
+const YOU: NavItem = { icon: User, label: "You", to: "/you", glow: "rgba(236,72,153,0.42)", tint: "#f472b6" };
+
+/** The sidebar: everything, in the order a customer's relationship runs — what
+ *  is happening now, then the money, then what the lender thinks of them. */
+export const NAV_GROUPS: NavGroup[] = [
+  { label: "Now", items: [HOME, TRACK, MESSAGES] },
+  { label: "Money", items: [REPAY, LOANS] },
+  { label: "Standing", items: [SCORE, LADDER, EXPOSURE] },
+  { label: "Account", items: [IDENTITY, YOU] },
 ];
+
+/** Flattened, for anything that wants the whole list without the headings. */
+export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+/**
+ * The thumb bar. FIVE, and it stays five.
+ *
+ * Not an arbitrary cap: the bar is capped at 520px and every item added past
+ * five takes width from the labels until they all truncate to three letters,
+ * at which point the icons are the only thing distinguishing them and the bar
+ * has stopped being navigation. The rail is where breadth goes.
+ */
+export const TAB_ITEMS: NavItem[] = [HOME, TRACK, MESSAGES, REPAY, YOU];
 
 const spring = { type: "spring" as const, stiffness: 380, damping: 32 };
 
@@ -124,7 +175,7 @@ export function GlowTabs() {
           boxShadow: "var(--shadow-lift)",
         }}
       >
-        {NAV_ITEMS.map((i) => (
+        {TAB_ITEMS.map((i) => (
           <Item key={i.to} item={i} rail={false} />
         ))}
       </div>

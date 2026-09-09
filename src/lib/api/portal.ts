@@ -467,7 +467,10 @@ export interface Offer {
   totalRepayable: number;
   firstDueDate: string;
   expectedClearDate: string;
-  expiresAt: string;
+  /** Null on a PRE-APPLICATION quote: a quote is recomputed on every render and
+   *  does not expire. An invented deadline there would be a pressure tactic
+   *  dressed as a fact. A real LoanOffer always carries one. */
+  expiresAt: string | null;
   schedule: OfferScheduleRow[];
   acceptedAt: string | null;
   payEarly: { savingKes: number; applies: boolean; note: string };
@@ -678,9 +681,24 @@ export interface LadderResponse {
   success: boolean;
   found: boolean;
   lender: string;
-  firstName?: string;
+  firstName?: string | null;
+  /**
+   * Which book the ladder came from. "native" is our own GraduationEvent table;
+   * "lender" is the lender's own graduation history, read live.
+   *
+   * There is deliberately no "unavailable" here. When a bridged lender's records
+   * cannot be reached the route answers 503 rather than 200, because the app
+   * renders `found: false` as a calm "you have no history yet" — the wrong
+   * sentence entirely for a customer who does have one. An error offers Retry.
+   */
+  source?: "native" | "lender";
   current?: {
     limit: number | null;
+    /**
+     * Real movements. NOT the lender's own GraduationCount, which their cron
+     * increments once per nightly run whether or not the limit moved — one live
+     * customer reads 193 against two actual steps.
+     */
     graduationCount: number;
     riskBand: string | null;
     clearedLoans: number;
@@ -689,6 +707,12 @@ export interface LadderResponse {
   startedAt?: number | null;
   totalGained?: number;
   rungs?: Rung[];
+  /**
+   * How many raw history rows these rungs stand for, when the lender's book
+   * records a row per review rather than per movement. Equal to the rung count
+   * on a healthy book; far higher on one that re-graduates nightly.
+   */
+  collapsedFrom?: number;
   /** The RULE, never a promise or a date. */
   next?: { rule: string; hasActiveLoan: boolean; action: string };
 }
@@ -776,5 +800,349 @@ export const consents = () =>
   apiFetch<{ success: boolean; catalogue: ConsentGrant[]; grants: Record<string, boolean>; version?: string }>(
     "/api/portal/consent",
     {},
+    { auth: true, idempotent: true },
+  );
+
+// ── The conversation ─────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/messages/route.ts
+//
+// The channel that did not exist until now. A customer whose liveness check
+// failed had exactly one route to a human — ring the office and hope the person
+// who answers can find them — and an officer holding that case had no way to
+// answer where the customer would ever see it.
+//
+// ── WHY sendMessage IS NOT MARKED IDEMPOTENT ────────────────────────────────
+// Two of these is two messages in an officer's queue from a customer who wrote
+// once, and the officer cannot tell which is the real one. That is not as
+// expensive as a double STK push, but the failure mode is the same shape — a
+// retry the customer did not ask for, producing a fact they did not create —
+// and the rule in transport.ts is that anything not provably safe to repeat
+// says nothing here and does not fail over.
+
+/** borrower · staff · system. `system` is the workflow talking, not a person. */
+export type MessageAuthor = "borrower" | "staff" | "system";
+
+export type ThreadKind = "APPLICATION" | "KYC_REVIEW" | "LOAN" | "REPAYMENT" | "GENERAL";
+export type ThreadState = "AWAITING_STAFF" | "AWAITING_CUSTOMER" | "RESOLVED";
+
+/** The machine-readable half of a system message. Unknown values render as their
+ *  plain text, so the server can add an event without breaking this build. */
+export type SystemEventId =
+  | "thread.opened" | "application.submitted" | "stage.advanced" | "stage.returned"
+  | "decision.made" | "kyc.referred" | "kyc.cleared" | "offer.signed" | "disbursed";
+
+export interface ThreadSummary {
+  id: string;
+  subject: string;
+  kind: ThreadKind;
+  state: ThreadState;
+  /** Which desk the case was on when this was opened. Null for a general question. */
+  stageTitle: string | null;
+  lastAt: string;
+  preview: string | null;
+  lastAuthor: MessageAuthor | null;
+  unread: number;
+  /** The officer who answered, by name. Never their staff id. */
+  answeredBy: string | null;
+  applicationId: string | null;
+}
+
+export interface Message {
+  id: string;
+  author: MessageAuthor;
+  authorName: string;
+  body: string;
+  event: SystemEventId | string | null;
+  eventData: unknown;
+  attachments: unknown;
+  at: string;
+}
+
+export interface ThreadDetail {
+  id: string;
+  subject: string;
+  kind: ThreadKind;
+  state: ThreadState;
+  stageTitle: string | null;
+  applicationId: string | null;
+  assignedStaffName: string | null;
+  createdAt: string;
+  messages: Message[];
+}
+
+export const myThreads = () =>
+  apiFetch<{ success: boolean; lender: string; threads: ThreadSummary[]; unread: number }>(
+    `/api/portal/messages?lenderSlug=${encodeURIComponent(LENDER_SLUG)}`,
+    {},
+    { auth: true, idempotent: true },
+  );
+
+export const readThread = (threadId: string) =>
+  apiFetch<{ success: boolean; lender: string; thread: ThreadDetail }>(
+    `/api/portal/messages?lenderSlug=${encodeURIComponent(LENDER_SLUG)}&threadId=${encodeURIComponent(threadId)}`,
+    {},
+    { auth: true, idempotent: true },
+  );
+
+/** NOT idempotent — see the note above. */
+export const sendMessage = (args: {
+  threadId?: string;
+  kind?: ThreadKind;
+  subject?: string;
+  applicationId?: string;
+  body: string;
+}) =>
+  apiFetch<{ success: boolean; threadId: string; messageId: string; at: string }>(
+    "/api/portal/messages",
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, ...args }) },
+    { auth: true },
+  );
+
+// ── The tracker ──────────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/track/route.ts
+//
+// The same stage chain the officer is working, resolved once on the server by
+// lib/workflow/chain.ts and read by both sides. That shared resolution is the
+// whole claim: "Risk Review" means the same desk on the customer's phone and on
+// the console, and neither screen can drift from the other.
+
+export type StageState = "done" | "current" | "upcoming" | "stopped";
+
+export interface TrackedStage {
+  /** The LENDER'S own name for the desk, not a sanitised customer-facing one. */
+  title: string;
+  state: StageState;
+  /** The lender's own SLA, as an expectation. Null where they set none — the
+   *  screen then says so rather than inventing a number. */
+  expectedHours: number | null;
+}
+
+export interface TrackedApplication {
+  id: string;
+  product: string | null;
+  amount: number;
+  approvedLimit: number | null;
+  status: string;
+  stageTitle: string | null;
+  submittedAt: string;
+  decidedAt: string | null;
+  lastMovedAt: string;
+  declined: boolean;
+  stages: TrackedStage[];
+  stepNumber: number;
+  stepCount: number;
+}
+
+export interface TrackResponse {
+  success: boolean;
+  found: boolean;
+  lender: string;
+  firstName?: string;
+  kycStatus?: string;
+  /** Null is a real answer: they have an account but have not applied. It is not
+   *  the same as `found: false`, and conflating the two tells somebody we have
+   *  never heard of them. */
+  application?: TrackedApplication | null;
+  loan?: { id: string; status: string; amount: number; disbursedAt: string | null } | null;
+  trail?: { id: string; label: string; stage: string | null; at: string }[];
+  /** An existing conversation about this application, so the screen offers "ask
+   *  about this" pointing INTO it rather than opening a second one beside it. */
+  conversation?: { id: string; unread: number } | null;
+}
+
+export const track = (nationalId: string) =>
+  apiFetch<TrackResponse>(
+    "/api/portal/track",
+    { method: "POST", body: who(nationalId) },
+    { auth: true, idempotent: true },
+  );
+
+// ── Applying ─────────────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/apply/route.ts
+//
+// THE CALL THE FUNNEL NEVER MADE. The wizard assembled a complete draft in React
+// state and then rendered "Onboarding complete." — a customer could walk the
+// whole journey and no application existed anywhere at the end of it.
+//
+// ── NOT IDEMPOTENT, AND NOT RETRIED ─────────────────────────────────────────
+// Two of these is two applications for one customer, and once the lender leg is
+// armed it is two rows in Micromart's live book that their officers cannot tell
+// apart. It declares nothing here and therefore never fails over — same rule as
+// pay() and ratibaSetup().
+
+export interface ApplyResponse {
+  success: boolean;
+  applicationId: string;
+  /** The conversation opened alongside the application, so the confirmation can
+   *  offer "ask about this" pointing at a thread that already exists. */
+  threadId: string | null;
+  amount: number;
+  product: string;
+  submittedAt: string;
+  /**
+   * What happened on the LENDER's side. For staff and the demo badge only —
+   * never rendered as a difference to the customer, because whether the founder
+   * has armed live posting is not a fact about their loan.
+   */
+  lender: {
+    armed: boolean;
+    posted: boolean;
+    loanId: string | null;
+    shadowed: boolean;
+    error: string | null;
+  };
+}
+
+export const apply = (args: {
+  productId: string;
+  amount: number;
+  nationalId?: string;
+  lat?: number;
+  lng?: number;
+}) =>
+  apiFetch<ApplyResponse>(
+    "/api/portal/apply",
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, ...args }) },
+    { auth: true },
+  );
+
+// ── The identity check, and the human behind it ──────────────────────────────
+// connected-suite/src/app/api/portal/kyc/status/route.ts
+//
+// A referral used to be a dead end with one word on it. The pipeline said
+// FAILED, the app said nothing more, and the customer's only route to a person
+// was to ring the office and hope whoever answered could find them.
+//
+// Now the reasons come back in the customer's own language, from the same policy
+// document the decision was made against — so a lender who changes an outcome
+// cannot leave behind a message describing the old one.
+//
+// ── WHAT DELIBERATELY DOES NOT COME BACK ────────────────────────────────────
+// The scores. A customer told their face matched at 79 against a floor of 80 has
+// been handed the number to beat, and the next attempt is tuned rather than
+// honest.
+
+export type KycState = "NONE" | "IN_PROGRESS" | "PENDING_REVIEW" | "VERIFIED" | "FAILED";
+
+export interface KycReason {
+  key: string;
+  /** One sentence, written for the customer, not for the officer. */
+  says: string;
+  /** True when a better photograph could plausibly change the answer. */
+  fixable: boolean;
+}
+
+export interface KycStatusResponse {
+  success: boolean;
+  found: boolean;
+  lender: string;
+  firstName?: string | null;
+  status: KycState;
+  /** False for somebody who has verified a phone and not yet begun. */
+  started: boolean;
+  submittedAt?: string;
+  reasons: KycReason[];
+  /**
+   * The screen's primary button hangs off this, and it is false unless EVERY
+   * firing signal is one a retake could fix. Offering "try again" against a
+   * registry miss sends somebody to retake a photo six times for a problem no
+   * photograph can solve.
+   */
+  retakeable: boolean;
+  /** The lender's own SLA. Null where they set none — say so, never invent one. */
+  expectedHours?: number | null;
+  conversation?: { id: string; unread: number } | null;
+}
+
+export const kycStatus = () =>
+  apiFetch<KycStatusResponse>(
+    `/api/portal/kyc/status?lenderSlug=${encodeURIComponent(LENDER_SLUG)}`,
+    {},
+    { auth: true, idempotent: true },
+  );
+
+// ── Home ─────────────────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/home/route.ts
+//
+// ONE call, not four. Home asks what can I borrow, what do I owe, has anyone
+// told me anything, and is anything of mine in flight — and answering those from
+// four routes is four round trips on the screen the app is judged on in the
+// first four seconds, over a Kenyan mobile connection.
+//
+// ── WHY THERE ARE TWO SCORES AND THEY MUST NOT BE MIXED ─────────────────────
+// `score` is OURS, out of 900, and is the number the Score screen explains.
+// `lenderScore` is Micromart's own, on ServiceSuite's scale — the live account
+// returns 30000 — and it is passed through labelled rather than rendered against
+// a 900 denominator, which would be nonsense on its face.
+
+/** Whose book answered. NOT cosmetic — see the note on the Home screen. */
+export type BookSource = "native" | "lender" | "unavailable";
+
+export interface HomeResponse {
+  success: boolean;
+  found: boolean;
+  lender: string;
+  firstName: string | null;
+  kycStatus: KycState;
+
+  /**
+   * "unavailable" must never render as a zero balance. One means "we could not
+   * ask your lender", the other means "you owe nothing", and showing the first
+   * as the second tells a customer in arrears that they are clear.
+   */
+  bookSource: BookSource;
+  limit: number;
+  outstanding: number;
+  available: number;
+  loanCount: number;
+  activeLoan: {
+    ref: string;
+    product: string | null;
+    balance: number;
+    loanAmount: number;
+    /** Null on a bridged book: their loan feed carries no instalment
+     *  breakdown, and inventing a date and an amount would put a figure on
+     *  screen the lender never quoted — and it is the figure a customer pays. */
+    nextDue: { date: string; amount: number } | null;
+    expectedClearDate: string | null;
+  } | null;
+  schedule: { seq: number; due: string; amount: number; status: string }[];
+
+  /** Ours, out of 900. Null until the engine has scored them. */
+  score: number | null;
+  band: string | null;
+  /** The lender's own, on the lender's own scale. Label it or drop it. */
+  avgDailySales: number | null;
+
+  /** Our own Ratiba debits into OUR books, so it is meaningful only for a
+   *  native lender. `available: false` is reported rather than the block being
+   *  omitted, so Repay can say "not offered by this lender yet" instead of
+   *  showing a switch that does nothing — the version a customer taps and then
+   *  believes is on. */
+  ratiba: { available: boolean; active: boolean; amount: number | null; frequency: string | null };
+  unreadMessages: number;
+  messages: {
+    id: string;
+    subject: string;
+    preview: string | null;
+    at: string;
+    /** So the panel says "You:" rather than attributing the customer's own
+     *  last message to the lender. */
+    fromStaff: boolean;
+    unread: boolean;
+  }[];
+  application: {
+    id: string;
+    status: string;
+    stageTitle: string | null;
+    amount: number;
+    product: string | null;
+  } | null;
+}
+
+export const home = (nationalId: string) =>
+  apiFetch<HomeResponse>(
+    "/api/portal/home",
+    { method: "POST", body: who(nationalId) },
     { auth: true, idempotent: true },
   );

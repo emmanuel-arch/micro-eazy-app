@@ -8,3 +8,10 @@ dist
 cm.tmp
 *.tmp
 .shots/
+
+# Media originals. The pipeline (scripts/media.mjs --archive) moves every
+# downloaded JPEG/PNG here after encoding, so public/ holds only what ships.
+# 46 MB of source photography does not belong in git history; the encoded WebP
+# in public/ is the deliverable and IS committed. Keep a copy of this folder if
+# you ever need to re-encode at a different size.
+media-src/

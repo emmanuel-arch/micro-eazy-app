@@ -25,49 +25,86 @@
 import type { Product } from "../quote";
 import type {
   DecisionResponse, ExposureResponse, LadderResponse, MyLoanResponse, Offer, RatibaPlan,
+  HomeResponse, KycStatusResponse, ThreadDetail, ThreadSummary, TrackResponse,
 } from "./portal";
 
 /** The customer every sample below is about. */
 export const SAMPLE_ID = "32145678";
 export const SAMPLE_LENDER = "Micromart Fintech";
 
-/**
- * Micromart's shelf.
- *
- * Two products, and the pair is the point: the same money at two rhythms, so
- * the comparison screen has something real to compare. Rates are as
- * /api/lms/products restates them — per repayment period, which is how a lender
- * quotes them and how a customer hears them. Micro Eazy is the live one: 82.5%
- * flat over ten weeks, which the endpoint returns as 8.25%/week.
- */
+// ── MICROMART'S SHELF, READ LIVE ON 9 SEP 2026 ──────────────────────────────
+//
+// Every figure below came off AvailableLoanProducts for entity 3005
+// (connected-suite/scripts/micromart-shelf.cjs prints them). They were
+// previously INVENTED, and four fields on the monthly product were wrong — it
+// was described as 12%/month REDUCING over FOUR months at 10,000–150,000, and
+// Micromart sells it as 22%/month FLAT over TWO months at 10,901–100,000. That
+// is not a cosmetic problem: it is the screen a customer accepts terms on.
+//
+// Rates are PER PERIOD, which is how the lender quotes them and how a customer
+// hears them: 8.25%/week over 10 weeks, 22%/month over 2 months.
+//
+// ── THE THIRD IS THE ENTRY RUNG ─────────────────────────────────────────────
+// MICRO CHAP CHAP (30221) is not a variant of the other two — it is the tier
+// BELOW them. Its bounds are 5,000–10,900 and Micro Eazy's floor is 10,901, so
+// the two are deliberately contiguous: Chap Chap is where a first-time borrower
+// starts and Micro Eazy is where the ladder carries them.
+//
+// It had no row in our Product table, so before the shelf was merged the app
+// could not serve ANYBODY asking for less than 10,901 — the whole entry tier was
+// invisible, and the customers most likely to be new to formal credit were the
+// ones being turned away. Worth stating plainly, because it did not present as a
+// bug; it presented as a shorter list.
+//
+// All three run the same workflow ("Micro Eazy", their WorkflowId 1022 → our
+// 00cc3f80-…), which is why SAMPLE_TRACK's two stages are right for any of them.
 export const SAMPLE_PRODUCTS: Product[] = [
   {
     id: "micro-eazy",
     name: "Micro Eazy",
-    description: "The weekly one. Small amounts, cleared in ten weeks, for stock and short gaps.",
-    minPrincipal: 1_000,
-    maxPrincipal: 50_000,
+    description: "Weekly working capital — up to ten weekly instalments. No guarantor, no security.",
+    minPrincipal: 10_901,
+    maxPrincipal: 100_000,
     interestRate: 8.25,
     interestUnit: "week",
     interestMethod: "flat",
     repaymentPeriod: 10,
     repaymentUnit: "week",
-    minCreditScore: 400,
+    minCreditScore: 500,
     charges: [{ name: "Registration fee", amount: 450, when: "before-disbursement" }],
   },
   {
     id: "micro-eazy-monthly",
     name: "Micro Eazy Monthly",
-    description: "The monthly one. Larger amounts over four months, on a reducing balance.",
-    minPrincipal: 10_000,
-    maxPrincipal: 150_000,
-    interestRate: 12,
+    description: "Monthly working capital — up to two monthly instalments. No guarantor, no security.",
+    minPrincipal: 10_901,
+    maxPrincipal: 100_000,
+    interestRate: 22,
     interestUnit: "month",
-    interestMethod: "reducing",
-    repaymentPeriod: 4,
+    interestMethod: "flat",
+    repaymentPeriod: 2,
     repaymentUnit: "month",
-    minCreditScore: 620,
+    minCreditScore: 500,
     charges: [{ name: "Registration fee", amount: 850, when: "before-disbursement" }],
+  },
+  {
+    // `ss:` because there is no local Product row for it — this is the id form
+    // /api/lms/products emits for a product that lives only on the lender's own
+    // shelf, and /api/portal/apply resolves it by re-reading that shelf.
+    id: "ss:30221",
+    name: "Micro Chap Chap",
+    description: "The first rung — small and quick, cleared over ten weeks. Where a new customer starts.",
+    minPrincipal: 5_000,
+    maxPrincipal: 10_900,
+    interestRate: 8.25,
+    interestUnit: "week",
+    interestMethod: "flat",
+    repaymentPeriod: 10,
+    repaymentUnit: "week",
+    minCreditScore: 500,
+    // No charge is recorded for this product on either side yet. Left EMPTY
+    // rather than copied from Micro Eazy — inventing a KSh 450 fee that the
+    // lender does not charge is the same class of error as omitting one they do.
   },
 ];
 
@@ -302,5 +339,266 @@ export const SAMPLE_EXPOSURE: ExposureResponse = {
     responded: 4,
     message:
       "Some lenders could not be reached, so you may owe more elsewhere than is shown here.",
+  },
+};
+
+/**
+ * POST /api/portal/track
+ *
+ * The same customer, mid-application: 26,000 on the weekly product, through the
+ * first of Micromart's TWO Micro Eazy stages.
+ *
+ * ── THE CHAIN IS THEIRS, AND IT IS SHORT ────────────────────────────────────
+ * This sample described a five-stage workflow — Data Capture, Risk Review,
+ * Customer Service, Finance, Disbursement — that Micromart does not have.
+ * Their real "Micro Eazy" workflow (00cc3f80-…, which BOTH products point at)
+ * is two stages: **Risk** (CRB required, tier 1) then **Customer Service**
+ * (finalizes, OTP, tier 2). Run scripts/show-workflow.cjs in connected-suite to
+ * print it.
+ *
+ * Inventing a longer chain made the screen look more impressive and would have
+ * been contradicted by the first officer to open the console beside it — which
+ * is precisely the comparison this screen invites, and the reason its whole
+ * value is that both sides resolve the chain from the same place.
+ *
+ * `expectedHours` is null on both because Micromart has `slaHours = 0` on every
+ * stage. That is the common case, not an omission, and the screen says "No
+ * fixed time on this step" rather than inventing a number.
+ */
+export const SAMPLE_TRACK: TrackResponse = {
+  success: true,
+  found: true,
+  lender: SAMPLE_LENDER,
+  firstName: "Emmanuel",
+  kycStatus: "VERIFIED",
+  application: {
+    id: "b1f4c8d2-3a77-4e91-8c22-9f0e5d6a7b31",
+    product: "Micro Eazy",
+    amount: 26_000,
+    approvedLimit: 45_000,
+    status: "OFFICER_REVIEW",
+    stageTitle: "Customer Service",
+    submittedAt: "2026-09-07T08:12:00.000Z",
+    decidedAt: null,
+    lastMovedAt: "2026-09-08T14:30:00.000Z",
+    declined: false,
+    // Risk cleared, Customer Service holding it. Two stages, because that is how
+    // many Micromart has.
+    stages: [
+      { title: "Risk", state: "done", expectedHours: null },
+      { title: "Customer Service", state: "current", expectedHours: null },
+    ],
+    stepNumber: 2,
+    stepCount: 2,
+  },
+  loan: null,
+  trail: [{ id: "t1", label: "Moved forward", stage: "Customer Service", at: "2026-09-08T14:30:00.000Z" }],
+  conversation: { id: "c9e2b5a1-77d3-4f60-9a18-3e4c6b8d0f52", unread: 1 },
+};
+
+/** GET /api/portal/messages — the list. */
+export const SAMPLE_THREADS: ThreadSummary[] = [
+  {
+    id: "c9e2b5a1-77d3-4f60-9a18-3e4c6b8d0f52",
+    subject: "About my application",
+    kind: "APPLICATION",
+    state: "AWAITING_CUSTOMER",
+    stageTitle: "Customer Service",
+    lastAt: "2026-09-08T15:02:00.000Z",
+    preview: "Thanks Emmanuel — we can see the statement now. One more thing: the ID photo is a little dark at the…",
+    lastAuthor: "staff",
+    unread: 1,
+    answeredBy: "Grace W.",
+    applicationId: "b1f4c8d2-3a77-4e91-8c22-9f0e5d6a7b31",
+  },
+  {
+    id: "a3d7f1e8-2b45-4c09-8e71-5a6d9c0b2f43",
+    subject: "About my ID check",
+    kind: "KYC_REVIEW",
+    state: "RESOLVED",
+    stageTitle: null,
+    lastAt: "2026-09-06T11:40:00.000Z",
+    preview: "That has cleared now — your ID matched on the second try. Nothing else needed from you.",
+    lastAuthor: "staff",
+    unread: 0,
+    answeredBy: "Grace W.",
+    applicationId: null,
+  },
+];
+
+/**
+ * GET /api/portal/messages?threadId=…
+ *
+ * Note the THIRD voice. `author: "system"` rows are the workflow talking — the
+ * stage advance lands in the same scroll as the conversation about it, in order,
+ * so "what happened to my loan" and "what did you say to me" are one thing to
+ * read rather than two to reconcile.
+ */
+export const SAMPLE_THREAD: ThreadDetail = {
+  id: "c9e2b5a1-77d3-4f60-9a18-3e4c6b8d0f52",
+  subject: "About my application",
+  kind: "APPLICATION",
+  state: "AWAITING_CUSTOMER",
+  stageTitle: "Customer Service",
+  applicationId: "b1f4c8d2-3a77-4e91-8c22-9f0e5d6a7b31",
+  assignedStaffName: "Grace W.",
+  createdAt: "2026-09-07T09:05:00.000Z",
+  messages: [
+    {
+      id: "m1",
+      author: "borrower",
+      authorName: "Emmanuel Kiptoo",
+      body: "Hello, I applied yesterday for 26,000 but I have not heard anything. Is there something you still need from me?",
+      event: null,
+      eventData: null,
+      attachments: [],
+      at: "2026-09-07T09:05:00.000Z",
+    },
+    {
+      id: "m2",
+      author: "staff",
+      authorName: "Grace W.",
+      body: "Hi Emmanuel — nothing needed yet. Your M-PESA statement is being read now, which usually takes under an hour. I will come back to you either way.",
+      event: null,
+      eventData: null,
+      attachments: [],
+      at: "2026-09-07T09:41:00.000Z",
+    },
+    {
+      id: "m3",
+      author: "system",
+      authorName: "Micro Eazy",
+      body: "Your application has moved to Customer Service.",
+      event: "stage.advanced",
+      eventData: { from: "Risk", to: "Customer Service", step: 2, of: 2 },
+      attachments: [],
+      at: "2026-09-08T14:30:00.000Z",
+    },
+    {
+      id: "m4",
+      author: "staff",
+      authorName: "Grace W.",
+      body: "Thanks Emmanuel — we can see the statement now. One more thing: the ID photo is a little dark at the bottom edge. Could you take it again in better light? Everything else is fine.",
+      event: null,
+      eventData: null,
+      attachments: [],
+      at: "2026-09-08T15:02:00.000Z",
+    },
+  ],
+};
+
+/**
+ * GET /api/portal/kyc/status — the REFERRED case, not the happy one.
+ *
+ * Deliberately the anxious state: a customer whose ID photo was not clear enough
+ * and whose face match landed in the review band. That is the screen worth
+ * reviewing — a verified customer sees one green tick and needs nothing from the
+ * design, while this person is the reason the screen exists.
+ *
+ * `retakeable: true` because BOTH reasons here are fixable by a better
+ * photograph. Swap `faceBorderline` for `iprsUnmatched` and it must flip to
+ * false — the button changes from "Take the photos again" to "Ask someone",
+ * which is the single most important behaviour on the screen.
+ */
+export const SAMPLE_KYC_REVIEW: KycStatusResponse = {
+  success: true,
+  found: true,
+  lender: SAMPLE_LENDER,
+  firstName: "Emmanuel",
+  status: "PENDING_REVIEW",
+  started: true,
+  submittedAt: "2026-09-09T06:40:00.000Z",
+  reasons: [
+    {
+      key: "idQualityLow",
+      says: "The photo of your ID was not clear enough for us to read confidently.",
+      fixable: true,
+    },
+    {
+      key: "faceBorderline",
+      says: "Your selfie is close to the photo on your ID, but we want a person to confirm it.",
+      fixable: true,
+    },
+  ],
+  retakeable: true,
+  // Micromart's default review SLA (lib/config/kyc.ts). Set to null and the
+  // screen says "no fixed time" instead — both states are real and both are
+  // reviewed.
+  expectedHours: 24,
+  conversation: { id: "a3d7f1e8-2b45-4c09-8e71-5a6d9c0b2f43", unread: 1 },
+};
+
+/**
+ * POST /api/portal/home
+ *
+ * The same customer as every other sample: 45,000 limit, 12,500 running, one
+ * loan, three cleared. `bookSource: "native"` because the sample IS the data —
+ * a sample cannot honestly claim to have reached a lender.
+ *
+ * The schedule is populated here on purpose even though a BRIDGED book returns
+ * none: this constant is what a reviewer sees offline, and the schedule panel is
+ * one of the screen's better answers to "how much do I still owe and when". The
+ * empty case is exercised live against Micromart, where their loan feed carries
+ * no instalment breakdown.
+ */
+export const SAMPLE_HOME: HomeResponse = {
+  success: true,
+  found: true,
+  lender: SAMPLE_LENDER,
+  firstName: "Emmanuel",
+  kycStatus: "VERIFIED",
+  bookSource: "native",
+  limit: 45_000,
+  outstanding: 12_500,
+  available: 32_500,
+  loanCount: 1,
+  activeLoan: {
+    ref: "7F3C1A22",
+    product: "Micro Eazy",
+    balance: 12_500,
+    loanAmount: 26_000,
+    nextDue: { date: "2026-09-12", amount: 2_600 },
+    expectedClearDate: "2026-10-17",
+  },
+  schedule: [
+    { seq: 1, due: "2026-08-15", amount: 2_600, status: "PAID" },
+    { seq: 2, due: "2026-08-22", amount: 2_600, status: "PAID" },
+    { seq: 3, due: "2026-08-29", amount: 2_600, status: "PAID" },
+    { seq: 4, due: "2026-09-05", amount: 2_600, status: "PAID" },
+    { seq: 5, due: "2026-09-12", amount: 2_600, status: "DUE" },
+    { seq: 6, due: "2026-09-19", amount: 2_600, status: "UPCOMING" },
+  ],
+  score: 712,
+  band: "Kuza",
+  // Their `CreditScore` field is average daily SALES, not a score — 30,000 a day
+  // is what the live account returns. Named correctly here so nobody is ever
+  // tempted to render it against a 900 denominator.
+  avgDailySales: 30_000,
+  ratiba: { available: true, active: true, amount: 2_600, frequency: "WEEKLY" },
+  unreadMessages: 1,
+  messages: [
+    {
+      id: "c9e2b5a1-77d3-4f60-9a18-3e4c6b8d0f52",
+      subject: "About my application",
+      preview: "Thanks Emmanuel — we can see the statement now. One more thing: the ID photo is a little dark at the…",
+      at: "2026-09-08T15:02:00.000Z",
+      fromStaff: true,
+      unread: true,
+    },
+    {
+      id: "a3d7f1e8-2b45-4c09-8e71-5a6d9c0b2f43",
+      subject: "About my ID check",
+      preview: "That has cleared now — your ID matched on the second try. Nothing else needed from you.",
+      at: "2026-09-06T11:40:00.000Z",
+      fromStaff: true,
+      unread: false,
+    },
+  ],
+  application: {
+    id: "b1f4c8d2-3a77-4e91-8c22-9f0e5d6a7b31",
+    status: "OFFICER_REVIEW",
+    stageTitle: "Customer Service",
+    amount: 26_000,
+    product: "Micro Eazy",
   },
 };

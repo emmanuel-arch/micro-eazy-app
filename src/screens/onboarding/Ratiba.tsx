@@ -32,20 +32,25 @@
 // control rather than a grey link, because dark-patterning somebody into a
 // direct debit is exactly the behaviour this product exists to replace.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, Ban, Check, Radio, ShieldCheck, Smartphone } from "lucide-react";
 import { LiquidButton } from "../../components/ui/LiquidButton";
 import { Artwork } from "../../components/media/Artwork";
-import type { RatibaPlan } from "../../lib/api/portal";
+import { ratibaOffer, type RatibaPlan } from "../../lib/api/portal";
+import { useSession } from "../../lib/session";
 import { SAMPLE_LENDER, SAMPLE_RATIBA } from "../../lib/api/samples";
 import { everyUnit, longDate, money, shortDate } from "../../lib/format";
 
 type State = "offer" | "sending" | "awaitingHandset" | "active" | "skipped";
 
 export default function Ratiba({
-  /** Swap for `await ratibaOffer(nationalId)`. The plan is derived server-side
-   *  from the loan and its product — nothing about the money comes from here. */
-  plan = SAMPLE_RATIBA,
+  /**
+   * The plan is derived SERVER-SIDE from the loan and its product — nothing
+   * about the money comes from here. Omit it and the screen fetches its own,
+   * which is what the funnel does: this step is reached mid-journey and has no
+   * parent holding a plan to hand down.
+   */
+  plan: given,
   /**
    * WHO IS BEING PAID. Not defaulted to "your lender": this is the one screen
    * whose entire job is naming exactly who will be taking money out of somebody's
@@ -59,6 +64,30 @@ export default function Ratiba({
   lender?: string;
   onDone?: () => void;
 }) {
+  const { nationalId } = useSession();
+  const [fetched, setFetched] = useState<RatibaPlan | null>(null);
+  const plan = given ?? fetched ?? SAMPLE_RATIBA;
+
+  // ── FETCHED HERE, NOT PASSED DOWN ────────────────────────────────────────
+  // /api/portal/standing-order answers `{ available: false }` for any lender
+  // whose book is not ours — Micromart included — and the screen below already
+  // renders that honestly. Which is the point of asking at all: the alternative
+  // is a sample that always says "available", and a customer on a bridged lender
+  // being walked through setting up a debit that will never be collected.
+  useEffect(() => {
+    if (given || !nationalId) return;
+    let alive = true;
+    ratibaOffer(nationalId)
+      .then((p) => alive && setFetched(p))
+      // A failed read is treated as "not available", which is the safe reading:
+      // it lets the customer past a step rather than stalling the funnel on a
+      // panel about a standing order nobody can confirm.
+      .catch(() => alive && setFetched({ success: false, available: false } as RatibaPlan));
+    return () => {
+      alive = false;
+    };
+  }, [given, nationalId]);
+
   // An order already authorised for this loan. The route returns it precisely
   // so the UI does not offer to create a second one — two standing orders is
   // two debits a month, and the customer finds that out on payday.
