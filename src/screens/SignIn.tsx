@@ -30,8 +30,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, IdCard, MessageSquare, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
-import { Sky } from "../components/shell/Sky";
+import { ArrowLeft, ArrowRight, Camera, IdCard, MessageSquare, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AuthLayout } from "../components/shell/AuthLayout";
+import { IdCapture, IdReadout, type IdCaptureResult } from "../components/kyc/IdCapture";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { useSession } from "../lib/session";
 
@@ -58,6 +59,13 @@ export default function SignIn() {
   const [notice, setNotice] = useState<string | null>(null);
   /** Set when the check could not reach a book, or found several people. */
   const [held, setHeld] = useState<{ title: string; body: string } | null>(null);
+  // ── THE SECOND DOOR TO THE SAME FIELD ────────────────────────────────────
+  // Typing the number is fast for somebody who knows it; photographing the card
+  // is the door for somebody who does not have it memorised and is standing in
+  // a shop holding it. Both fill the SAME field and run the SAME enrolment
+  // check afterwards — the camera is not a shortcut past anything.
+  const [capturing, setCapturing] = useState(false);
+  const [read, setRead] = useState<IdCaptureResult | null>(null);
 
   useEffect(() => {
     if (!phone && status !== "verified") navigate("/welcome", { replace: true });
@@ -167,18 +175,48 @@ export default function SignIn() {
     }
   }
 
+  // The read fills the field and closes the camera. It deliberately does NOT
+  // submit: the customer sees what came off the card and confirms it, because
+  // an OCR that is wrong and self-submitting sends somebody's application off
+  // under a stranger's ID number.
+  function onRead(r: IdCaptureResult) {
+    setRead(r);
+    setCapturing(false);
+    if (r.ocr.idNumber) {
+      setNationalId(r.ocr.idNumber.replace(/D/g, "").slice(0, 8));
+      setError(null);
+    }
+  }
+
   return (
-    <>
-      <Sky title={panel === "code" ? "Check your messages" : "One more thing"} onBack={() => navigate("/welcome")}>
-        <p className="max-w-[36ch] text-[13px] leading-relaxed text-sky-ink-soft">
+    // The same frame as the two doors before it. The code gate and the ID
+    // capture used to sit under a Sky band in the app's ordinary content
+    // column, so the photography and the credibility stopped at exactly the
+    // point the customer was asked to photograph their national ID — the step
+    // that needs them most. See components/shell/AuthLayout.tsx.
+    <AuthLayout>
+      <div>
+        {/* The title lives in the column now rather than in a header band, so
+            the left side reads as one continuous surface from the front door
+            through to the capture. */}
+        <button
+          type="button"
+          onClick={() => navigate("/welcome")}
+          className="mb-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-faint transition-colors hover:text-ink"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
+          Back
+        </button>
+        <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink">
+          {panel === "code" ? "Check your messages" : "One more thing"}
+        </h1>
+        <p className="mt-2 max-w-[38ch] text-[13.5px] leading-relaxed text-ink-soft">
           {panel === "code"
             ? `We sent a 6-digit code to ${formatLocal(phone)}. It is good for a few minutes.`
             : "Your ID number, so we can find your records and check this number belongs to you."}
         </p>
-      </Sky>
 
-      <div className="relative z-10 -mt-12 px-4">
-        <div className="mx-auto max-w-[560px] space-y-3">
+        <div className="mt-6 space-y-3">
           {held ? (
             <HeldPanel
               title={held.title}
@@ -299,6 +337,65 @@ export default function SignIn() {
                 </LiquidButton>
               </form>
 
+              {/* ── The camera door ───────────────────────────────────────── */}
+              {!capturing && !read && (
+                <>
+                  <div className="mt-4 flex items-center gap-3">
+                    <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+                    <span className="text-[11px] font-medium text-ink-faint">or</span>
+                    <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCapturing(true)}
+                    className="mt-3 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-surface-sunk active:scale-[0.99]"
+                    style={{ borderColor: "var(--line-strong)" }}
+                  >
+                    <span
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                      style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
+                    >
+                      <Camera className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold leading-tight">Photograph your ID instead</span>
+                      <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
+                        We read the number off the card — the same way a branch officer does.
+                      </span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+                  </button>
+                </>
+              )}
+
+              {capturing && (
+                <div className="mt-4">
+                  <IdCapture nationalId={nationalId || undefined} onRead={onRead} onCancel={() => setCapturing(false)} />
+                </div>
+              )}
+
+              {read && !capturing && (
+                <div className="mt-4">
+                  <IdReadout
+                    ocr={read.ocr}
+                    onRetake={() => {
+                      setRead(null);
+                      setCapturing(true);
+                    }}
+                  />
+                  {/* The mismatch is the server's finding, not ours, and it is
+                      worth surfacing rather than silently preferring either
+                      number: one of the two is wrong and only the customer can
+                      say which. */}
+                  {read.step.idMismatch && (
+                    <p className="mt-2 text-[12px] font-medium leading-snug" style={{ color: "#e11d48" }}>
+                      The number on the card is not the one you typed. Check which is right before you continue.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <p className="mt-3 flex items-start gap-2 text-[11.5px] leading-relaxed text-ink-faint">
                 <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" style={{ color: "var(--green-ink)" }} />
                 <span>
@@ -310,7 +407,7 @@ export default function SignIn() {
           )}
         </div>
       </div>
-    </>
+    </AuthLayout>
   );
 }
 

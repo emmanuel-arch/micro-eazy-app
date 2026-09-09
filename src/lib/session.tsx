@@ -46,6 +46,8 @@ import {
 import {
   enrolment as fetchEnrolment,
   getSession,
+  micromartResetPassword,
+  micromartSignIn,
   sendOtp,
   signOut as apiSignOut,
   verifyOtp,
@@ -80,6 +82,16 @@ interface Ctx {
   requestCode: (phone: string) => Promise<{ ok: boolean; delivered: boolean; devCode?: string; message: string }>;
   /** Step two. On success the cookie exists and `status` becomes "verified". */
   submitCode: (phone: string, code: string) => Promise<{ ok: boolean; reason?: string; message: string }>;
+  /** The EXISTING customer's door: the password Micromart already SMS'd them.
+   *  Mints the same cookie as the code, so everything downstream is identical.
+   *  `reachable: false` is "we could not ask", which is not a refusal. */
+  signInWithPassword: (
+    phone: string,
+    password: string,
+  ) => Promise<{ ok: boolean; reason?: string; reachable: boolean; message: string }>;
+  /** Ask Micromart to mint a new password and SMS it. Never retried silently:
+   *  each call invalidates the password the customer is currently holding. */
+  resetPassword: (phone: string) => Promise<{ ok: boolean; message: string }>;
   /** Step three: the second factor, and the returning-or-new decision. */
   identify: (nationalId: string) => Promise<Enrolment>;
   signOut: () => Promise<void>;
@@ -226,6 +238,49 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [setNationalId],
   );
 
+  // ── THE EXISTING CUSTOMER'S DOOR ─────────────────────────────────────────
+  // Micromart's own book predates this platform, so their customers' passwords
+  // are not in our Postgres and the PIN door cannot check them. This asks
+  // Micromart, on the server, and comes back with the same cookie the code
+  // funnel mints — which is why nothing after this point needs to know which
+  // door was used.
+  const signInWithPassword = useCallback(async (phone: string, password: string) => {
+    try {
+      const r = await micromartSignIn(phone, password);
+      if (!r.success) {
+        return { ok: false, reason: r.reason, reachable: r.reachable !== false, message: r.message ?? "That did not match." };
+      }
+      setStatus("verified");
+      setPhoneMasked(maskLocal(phone));
+      if (r.name) setFirstName(r.name.split(/s+/)[0] ?? null);
+      // A customer who signed in with a Micromart password IS a Micromart
+      // customer — that is what the password proves. Recording it here stops
+      // the app offering them onboarding they finished years ago.
+      setEnrolled("returning");
+      return { ok: true, reachable: true, message: "" };
+    } catch (e) {
+      // 401 "did not match", 409 ambiguous and 503 unreachable all arrive as
+      // ApiError. The 503 must NOT read as a refusal — see portal.ts.
+      const body = (e as { body?: { reachable?: boolean } })?.body;
+      const status = (e as { status?: number })?.status;
+      return {
+        ok: false,
+        reason: reasonOf(e),
+        reachable: body?.reachable !== false && status !== 503,
+        message: messageOf(e, "We could not sign you in just now."),
+      };
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (phone: string) => {
+    try {
+      const r = await micromartResetPassword(phone);
+      return { ok: Boolean(r.success), message: r.message ?? "" };
+    } catch (e) {
+      return { ok: false, message: messageOf(e, "We could not request a new password just now.") };
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await apiSignOut();
@@ -248,10 +303,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       enrolment: enrolmentState,
       requestCode,
       submitCode,
+      signInWithPassword,
+      resetPassword,
       identify,
       signOut,
     }),
-    [status, phoneMasked, nationalId, enrolled, firstName, lender, enrolmentState, requestCode, submitCode, identify, signOut],
+    [status, phoneMasked, nationalId, enrolled, firstName, lender, enrolmentState, requestCode, submitCode, signInWithPassword, resetPassword, identify, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

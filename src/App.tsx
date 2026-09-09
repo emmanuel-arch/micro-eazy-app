@@ -14,10 +14,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
-import { GlowRail, GlowTabs } from "./components/nav/GlowNav";
+import { GlowTabs } from "./components/nav/GlowNav";
+import { AppShell } from "./components/shell/AppShell";
 import { ThemeProvider } from "./lib/theme";
 import { SessionProvider, useSession } from "./lib/session";
 import SignIn from "./screens/SignIn";
+import SignInPassword from "./screens/SignInPassword";
+import { Splash, useSplashFloor } from "./components/shell/Splash";
 import { Resource } from "./components/data/Resource";
 import { exposure, ladder, whyThisDecision } from "./lib/api/portal";
 import Home from "./screens/Home";
@@ -29,50 +32,27 @@ import WhyThisDecision from "./screens/WhyThisDecision";
 import Ladder from "./screens/Ladder";
 import Exposure from "./screens/Exposure";
 
-function Wordmark() {
-  return (
-    <div className="flex items-center gap-2.5 px-2 py-1">
-      {/* ── THE REAL MARK, not a letter in a box ─────────────────────────
-          The same file the manifest installs to the home screen and the same
-          one the app it replaces uses, so the icon a customer taps and the
-          mark at the top of the app are one image rather than two things that
-          merely resemble each other.
-
-          ON A WHITE CHIP, which is the rule the previous app already settled
-          (see pwa/src/components/eco/EazyLoader.jsx — "the app icon, on the
-          white chip"). The mark is navy and green on transparency, so in dark
-          mode its navy half would sink into a near-black rail and the logo
-          would read as a green smear. The chip is also how the icon actually
-          appears on a launcher, so this is what the customer already knows. */}
-      <span
-        className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-white"
-        style={{ boxShadow: "0 6px 18px -8px var(--navy)" }}
-      >
-        <img
-          src="/brand/micro-eazy/icon-192.png"
-          alt=""
-          width={36}
-          height={36}
-          className="h-9 w-9 object-contain"
-          // Decorative: the wordmark beside it already says "Micro Eazy", and a
-          // screen reader announcing the name twice is noise.
-          aria-hidden="true"
-        />
-      </span>
-      <span className="leading-none">
-        <span className="block text-[15px] font-bold tracking-[-0.02em]">Micro Eazy</span>
-        <span className="block text-[11px] text-ink-faint">Quick loans. Better living.</span>
-      </span>
-    </div>
-  );
-}
+/** The signed-in frame is AppShell now — the console's sidebar-to-the-top-edge
+ *  layout, with the mark at the head of its own navigation. The old GlowRail and
+ *  its inline wordmark are gone; components/shell/BrandMark.tsx owns how the mark
+ *  is drawn, on every surface in the app. */
 
 /** Routes that own the whole screen — no nav, no way out but forward or back.
  *
  *  The front door is here for the same reason onboarding is: a person who has
  *  not signed in yet has nothing to navigate TO, and four tabs under a sign-in
  *  form are four ways to leave before starting. */
-const FOCUSED = ["/join", "/welcome", "/verify"];
+// ── THE PUBLIC DOORS ────────────────────────────────────────────────────────
+// Only these three. They cannot carry the shell: somebody who has not signed in
+// has no destinations to navigate to and no account to open, so a sidebar there
+// would be five links that all bounce straight back to this gate.
+//
+// /join USED to be listed here, on the argument that a nav bar during a
+// verification flow is an invitation to abandon it. Overruled deliberately: the
+// customer IS signed in by then, and a wizard with no way to reach your own
+// account or sign out reads as a trap rather than as focus. The stepper still
+// says how far through it they are.
+const FOCUSED = ["/welcome", "/verify", "/signin"];
 
 /**
  * ── THE GUARD ───────────────────────────────────────────────────────────────
@@ -92,21 +72,12 @@ function RequireSession({ children }: { children: ReactNode }) {
   const { status } = useSession();
   const { pathname } = useLocation();
 
-  if (status === "unknown") {
-    return (
-      <div className="grid min-h-[60vh] place-items-center px-6" role="status" aria-live="polite">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <span
-            className="grid h-12 w-12 place-items-center overflow-hidden rounded-2xl bg-white"
-            style={{ boxShadow: "0 10px 28px -12px var(--navy)" }}
-          >
-            <img src="/brand/micro-eazy/icon-192.png" alt="" width={48} height={48} className="h-12 w-12 object-contain" aria-hidden="true" />
-          </span>
-          <p className="text-[12.5px] text-ink-faint">Checking your session…</p>
-        </div>
-      </div>
-    );
-  }
+  // "unknown" never reaches here any more: Shell holds the boot splash over the
+  // whole app until the session question has an answer, so a route element
+  // cannot render before there is one. Kept as a guard rather than deleted —
+  // if that ever changes, the honest thing is to render nothing for a frame
+  // rather than to redirect somebody who may well be signed in.
+  if (status === "unknown") return null;
 
   // `state` carries where they were going, so an expired session resumes at the
   // screen they wanted rather than dumping everyone on the home tab.
@@ -115,9 +86,34 @@ function RequireSession({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Which frame the routes render in.
+ *
+ * Signed in → the shell: sidebar, floating identity control, mobile drawer.
+ * A public door → nothing but a width, because those screens bring their own
+ * frame (AuthLayout) and a second one around them would nest two headers.
+ */
+function Frame({ chrome, bleed, children }: { chrome: boolean; bleed: boolean; children: ReactNode }) {
+  if (chrome) return <AppShell>{children}</AppShell>;
+  return <main className={`mx-auto w-full ${bleed ? "max-w-none" : "max-w-[1040px] pb-12"}`}>{children}</main>;
+}
+
 function Shell() {
   const { pathname } = useLocation();
   const { status } = useSession();
+
+  // ── THE BOOT SPLASH ──────────────────────────────────────────────────────
+  // Held over the whole app until TWO things are true: the session question has
+  // an answer, and the mark has been up long enough to read as an arrival
+  // rather than a flicker. Whichever is later.
+  //
+  // It is deliberately not a route. The app it replaces shows its loader on a
+  // flat two-second timer that is not tied to anything, which taxes a customer
+  // who is already signed in; and putting it on "/" alone would mean somebody
+  // opening a deep link — or the /welcome the old bookmarks point at — watches
+  // the app assemble itself instead. One gate, every entry.
+  const holding = useSplashFloor();
+  const booting = status === "unknown" || holding;
 
   // ── THE NAV IS NOT JUST A ROUTE QUESTION ─────────────────────────────────
   // A route being "focused" hides the chrome for onboarding and the front door.
@@ -133,41 +129,34 @@ function Shell() {
   const focused = FOCUSED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const chrome = !focused && status === "verified";
 
+  // ── THE FRONT-OF-HOUSE SCREENS OWN THE VIEWPORT ──────────────────────────
+  // Everything before a customer is inside the app — the front door, the
+  // password door, the code gate and the ID capture — runs edge to edge and
+  // carries its own frame (AuthLayout: mark top-left, content left, photography
+  // sliding down the right). Holding those in a 1040px column put two feet of
+  // empty page around the screens that are doing the persuading.
+  //
+  // Onboarding and everything behind the session still take the measured
+  // column: they are reading surfaces, and a 1440px line of body text is
+  // unreadable.
+  const bleed = ["/welcome", "/signin", "/verify"].includes(pathname);
+
   return (
     <div className="min-h-full">
-      {chrome && (
-        <GlowRail>
-          <Wordmark />
-        </GlowRail>
-      )}
+      {booting && <Splash />}
 
-      <div className={chrome ? "lg:pl-[248px]" : ""}>
-        {/* ── WIDTH IS A DESIGN DECISION, NOT A BREAKPOINT ─────────────────
-            The phone is the design target, so the column is 560px — the width
-            at which a line of body text is comfortable and a card is a card.
-
-            But this app is also opened on a laptop: by a customer who prefers a
-            keyboard, and by staff walking somebody through it. Holding a 560px
-            column in the middle of a 1440px screen is not "mobile-first", it is
-            a phone in a window with two feet of empty page around it, and it
-            reads as an app that was never finished.
-
-            So above `xl` the column opens to a real canvas and the SCREENS
-            decide what to do with it — Home splits into a primary and a
-            secondary column; onboarding deliberately does not, because a
-            verification flow with a sidebar of distractions is a verification
-            flow people abandon. */}
-        <main
-          className={`mx-auto w-full ${
-            chrome ? "max-w-[560px] pb-32 lg:max-w-[720px] xl:max-w-[1180px] lg:pb-12" : "max-w-[1040px] pb-12"
-          }`}
-        >
+      <Frame chrome={chrome} bleed={bleed}>
           <Routes>
             {/* ── The two public doors ────────────────────────────────────
                 Everything else is behind RequireSession. These two cannot be,
                 because they are how a session is obtained in the first place. */}
             <Route path="/welcome" element={<Welcome />} />
             <Route path="/verify" element={<SignIn />} />
+            {/* The third public door, and the one most of Micromart's existing
+                book will use: the password already sitting in their SMS inbox.
+                It mints the same cookie as the code, so everything behind it is
+                identical — see screens/SignInPassword.tsx. */}
+            <Route path="/signin" element={<SignInPassword />} />
 
             <Route path="/" element={<RequireSession><Home /></RequireSession>} />
             {/* Onboarding is gated too. A person reaches it only after a code
@@ -244,8 +233,7 @@ function Shell() {
             <Route path="/you" element={<RequireSession><Placeholder title="You" /></RequireSession>} />
             <Route path="*" element={<Placeholder title="Not found" />} />
           </Routes>
-        </main>
-      </div>
+      </Frame>
 
       {chrome && <GlowTabs />}
     </div>

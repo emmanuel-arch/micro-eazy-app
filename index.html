@@ -45,9 +45,13 @@
       (function () {
         try {
           var stored = localStorage.getItem("me.theme");
+          // LIGHT is the default — only an explicit "dark", or an explicit
+          // "system" on a dark handset, paints dark. An unset value is light,
+          // which is what makes the splash white on first run. Keep in step
+          // with DEFAULT_CHOICE in src/lib/theme.tsx.
           var dark =
             stored === "dark" ||
-            ((!stored || stored === "system") &&
+            (stored === "system" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
           var m = document.querySelector('meta[name="theme-color"]');

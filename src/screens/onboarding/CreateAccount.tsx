@@ -26,6 +26,7 @@
 import { useState } from "react";
 import { IdCard, Camera, ShieldCheck, ArrowRight, Info } from "lucide-react";
 import { LiquidButton } from "../../components/ui/LiquidButton";
+import { IdCapture, IdReadout, type IdCaptureResult } from "../../components/kyc/IdCapture";
 import { useSession } from "../../lib/session";
 
 /** Kenyan national ID numbers run 7–8 digits. Anything else is a typo, and
@@ -47,6 +48,10 @@ export default function CreateAccount({ onDone }: { onDone?: (nationalId: string
   const [nationalId, setNationalId] = useState(verifiedId ?? "");
   const [consented, setConsented] = useState(false);
   const [touched, setTouched] = useState(false);
+  // The camera door. It fills the SAME field the keyboard does and grants
+  // nothing extra — see components/kyc/IdCapture.tsx.
+  const [capturing, setCapturing] = useState(false);
+  const [read, setRead] = useState<IdCaptureResult | null>(null);
 
   const valid = idLooksValid(nationalId);
   const showError = touched && nationalId.length > 0 && !valid;
@@ -96,7 +101,8 @@ export default function CreateAccount({ onDone }: { onDone?: (nationalId: string
 
         <button
           type="button"
-          className="mt-3 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors active:scale-[0.99]"
+          onClick={() => setCapturing(true)}
+          className="mt-3 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-surface-sunk active:scale-[0.99]"
           style={{ borderColor: "var(--line-strong)" }}
         >
           <span
@@ -114,6 +120,32 @@ export default function CreateAccount({ onDone }: { onDone?: (nationalId: string
           <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
         </button>
       </section>
+
+      {capturing && (
+        <IdCapture
+          nationalId={nationalId || undefined}
+          onCancel={() => setCapturing(false)}
+          onRead={(r) => {
+            setRead(r);
+            setCapturing(false);
+            // Fills the field; does NOT continue on the customer's behalf. An
+            // OCR that is wrong and self-submitting sends an application off
+            // under a stranger's ID number, and the consent below has still not
+            // been given at this point.
+            if (r.ocr.idNumber) setNationalId(r.ocr.idNumber.replace(/D/g, "").slice(0, 8));
+          }}
+        />
+      )}
+
+      {read && !capturing && (
+        <IdReadout
+          ocr={read.ocr}
+          onRetake={() => {
+            setRead(null);
+            setCapturing(true);
+          }}
+        />
+      )}
 
       {/* ── The permission. On the screen, not behind a link. ───────────────── */}
       <section className="card overflow-hidden">

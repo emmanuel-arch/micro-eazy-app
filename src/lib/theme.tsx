@@ -20,6 +20,21 @@ export type Resolved = "light" | "dark";
 
 const KEY = "me.theme";
 
+// ── LIGHT UNTIL SOMEBODY SAYS OTHERWISE ─────────────────────────────────────
+// This was "system", which meant a customer on a dark-mode handset never saw
+// the brand as it was designed — the white splash, the paper-and-navy front
+// door — without going and changing a setting. The app it replaces has no dark
+// mode at all, so "system" also made the two look like different products on
+// the same phone.
+//
+// It is a DEFAULT, not a lock: the toggle still cycles light → dark → system,
+// and an explicit choice is still what gets stored and honoured for ever. Only
+// the answer to "nothing stored yet" changed.
+//
+// Keep in step with the anti-flash script in index.html, which has to make the
+// same decision before this module can run.
+const DEFAULT_CHOICE: ThemeChoice = "light";
+
 interface Ctx {
   choice: ThemeChoice;
   resolved: Resolved;
@@ -33,11 +48,11 @@ const ThemeContext = createContext<Ctx | null>(null);
 function readStored(): ThemeChoice {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "light" || v === "dark" || v === "system" ? v : "system";
+    return v === "light" || v === "dark" || v === "system" ? v : DEFAULT_CHOICE;
   } catch {
     // Private windows and locked-down browsers throw on ACCESS, not just on
     // write. A theme preference is never worth a blank screen.
-    return "system";
+    return DEFAULT_CHOICE;
   }
 }
 

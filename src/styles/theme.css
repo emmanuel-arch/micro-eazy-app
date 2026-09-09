@@ -278,3 +278,180 @@ body {
     transform: none;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE SPLASH — ported from the app it replaces.
+   ---------------------------------------------------------------------------
+   Values lifted verbatim from micromart-client-pwa's `.pageloader` and
+   `.loader10` (public/assets/css/app.css:35536 and :35958), because a customer
+   who installed the old app and installs this one should not be able to tell
+   that the loading screen changed. Same 85% ground, same 18px backdrop blur,
+   same three 16px dots on a 1.8s cycle with -0.32s/-0.16s/0 delays.
+
+   ── WHAT CHANGED, AND WHY ────────────────────────────────────────────────────
+   The dot colour. The original hard-codes ServiceSuite's accent; this reads
+   --green-ink, which is the token that is legible as TYPE on paper in the light
+   theme and is lightened for the dark one. A brand dot that vanishes into a
+   near-black ground is the one failure mode a loading indicator cannot have.
+
+   ── WHY IT IS NOT ALWAYS WHITE ───────────────────────────────────────────────
+   The original carries `[data-bs-theme=dark] .pageloader { rgba(0,0,0,.85) }`,
+   so replicating it faithfully means replicating that too. It also matters more
+   here than it did there: index.html runs an anti-flash script before first
+   paint precisely so a dark-mode phone never sees a white rectangle, and a
+   splash that ignored it would reintroduce the exact flash that script exists
+   to kill — on the very first frame of the app, which is the worst place for it.
+
+   The MARK stays on its white chip in both themes. It is navy and green on
+   transparency, so on a dark ground its navy half would sink and the logo would
+   read as a green smear. That is the same rule the wordmark and the session
+   check already follow.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.pageloader {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background-color: hsl(0 0% 100% / 0.85);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="dark"] .pageloader {
+  background-color: rgb(0 0 0 / 0.85);
+}
+
+/* Three dots, and the outer two are pseudo-elements — the original's structure,
+   kept because the animation delays are what make it read as a wave rather than
+   a pulse, and they are keyed to that structure. */
+.loader10,
+.loader10::before,
+.loader10::after {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  animation: loader10anim 1.8s ease-in-out infinite;
+  animation-fill-mode: both;
+}
+
+.loader10 {
+  position: relative;
+  font-size: 7px;
+  color: var(--green-ink);
+  text-indent: -9999em;
+  transform: translateZ(0);
+  animation-delay: -0.16s;
+}
+
+.loader10::before,
+.loader10::after {
+  content: "";
+  position: absolute;
+  top: 0;
+}
+
+.loader10::before { left: -3.5em; animation-delay: -0.32s; }
+.loader10::after  { left: 3.5em; }
+
+@keyframes loader10anim {
+  0%, 80%, 100% { box-shadow: 0 2.5em 0 -1.3em; }
+  40%           { box-shadow: 0 2.5em 0 0; }
+}
+
+/* A loading indicator that animates is decoration; one that does not still has
+   to say it is working. The dots hold at full size rather than disappearing. */
+@media (prefers-reduced-motion: reduce) {
+  .loader10,
+  .loader10::before,
+  .loader10::after {
+    animation: none;
+    box-shadow: 0 2.5em 0 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE BAND THAT STOPS AT THE BREAKPOINT.
+   ---------------------------------------------------------------------------
+   The front door wears the sky band on a phone and NOT on a laptop, where a
+   full-bleed photograph is already carrying the screen and a navy gradient
+   beside it is a second surface competing to be the subject.
+
+   Tailwind's `lg:bg-none` is not enough on its own: it clears background-image,
+   but `.sky` sets a background COLOUR too, and `.aurora`'s two blurred radials
+   are pseudo-elements that no utility reaches. So the reset is a class, applied
+   next to `.sky aurora`, that undoes all three.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .sky-phone-only {
+    background: transparent;
+    color: inherit;
+  }
+  .sky-phone-only.aurora::before,
+  .sky-phone-only.aurora::after {
+    display: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE MARK, AND WHEN IT WEARS A CHIP.
+   ---------------------------------------------------------------------------
+   The logo is navy-and-green artwork on transparency. Three surfaces, two
+   answers:
+
+     paper (light theme)   NO chip. A white square on a white page is not a
+                           frame, it is a box — it made the mark read as a
+                           favicon rather than as the company's logo.
+     dark theme            CHIP. The navy half sinks into a near-black ground
+                           and the mark reads as a green smear without one.
+     the .sky band         CHIP, in BOTH themes. The band is navy either way,
+                           so this is the same problem as the dark theme and
+                           has to be solved even when the theme is light. It is
+                           why this rule is CSS keyed on the surface rather than
+                           a prop each caller has to remember.
+
+   The chip is deliberately tighter than the old one: a small radius and a
+   little padding, so it reads as a plate under the mark rather than as an app
+   tile around it.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.brand-chip {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+[data-theme="dark"] .brand-chip,
+.sky .brand-chip {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 5px;
+  box-shadow:
+    0 8px 22px -10px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+
+/* ── THE EXCEPTION, AND WHY IT IS NEEDED ─────────────────────────────────────
+   The auth header carries `.sky` at EVERY width, because the phone still wants
+   the navy band. Above lg, .sky-phone-only paints it transparent — but the
+   descendant rule above was still matching on the class, so the mark wore a
+   white chip on white paper, which is the boxed-in look the chip exists to
+   avoid.
+
+   Guarded on :root:not([data-theme="dark"]) so it only lifts the chip where the
+   ground is actually pale. In the dark theme that header is transparent over a
+   near-black page, which is precisely where the chip is load-bearing. */
+@media (min-width: 1024px) {
+  :root:not([data-theme="dark"]) .sky-phone-only .brand-chip {
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+}
+
+/* The splash is white in the light theme, so the mark needs nothing there
+   either — and the splash is NOT inside .sky, so it takes the rules above
+   unchanged. Noted here only so the next person does not go looking. */

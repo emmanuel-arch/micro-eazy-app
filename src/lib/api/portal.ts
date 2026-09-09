@@ -171,6 +171,151 @@ export const signInWithPin = (nationalId: string, pin: string) =>
     { auth: false },
   );
 
+/**
+ * POST /api/portal/micromart — connected-suite/src/app/api/portal/micromart/route.ts
+ *
+ * THE EXISTING CUSTOMER'S DOOR. Phone plus the password Micromart already SMS'd
+ * them, checked against Micromart's own Login API on the server, which then
+ * mints the SAME `lms_borrower` cookie the OTP funnel issues. So a customer who
+ * comes in this way is indistinguishable downstream from one who came in through
+ * the code — every gated screen behind it works identically.
+ *
+ * This is NOT signInWithPin. That door compares a bcrypt hash in our own
+ * Postgres, which is the right check for somebody who onboarded through this
+ * platform and the wrong one for Micromart's existing book: their credentials
+ * have never been in our database and are not going to be.
+ *
+ * ── THE FOUR ANSWERS, AND WHY 503 IS NOT 401 ────────────────────────────────
+ * A 401 is "that did not match". A 503 means no book could be REACHED, and
+ * rendering it as a refusal tells a ten-year customer they are not registered
+ * because a network hop failed — which invites them to register again. A 409 is
+ * `ambiguous`: the number is on more than one Micromart book, a data fault only
+ * a human can fix.
+ */
+export interface MicromartSignIn {
+  success: boolean;
+  authenticated?: boolean;
+  entityId?: number;
+  name?: string | null;
+  accountNumber?: string | null;
+  /** Present on failures. `reachable: false` accompanies the 503. */
+  reason?: "rejected" | "ambiguous";
+  reachable?: boolean;
+  message?: string;
+}
+
+export const micromartSignIn = (phone: string, password: string) =>
+  apiFetch<MicromartSignIn>(
+    "/api/portal/micromart",
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, password }) },
+    { auth: false },
+  );
+
+/**
+ * Ask Micromart to mint a new password and SMS it — through their own outbox,
+ * under their own sender id.
+ *
+ * NOT idempotent, and it must never be retried automatically: every accepted
+ * call invalidates the password the customer is currently holding, so a silent
+ * second attempt makes the SMS they are reading wrong. Same rule as
+ * sendSigningCode().
+ *
+ * The reply is the same whether or not the number is known — it would otherwise
+ * be an endpoint whose only job is answering "does this number bank here?".
+ */
+export const micromartResetPassword = (phone: string) =>
+  apiFetch<{ success: boolean; reachable?: boolean; message?: string }>(
+    "/api/portal/micromart",
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, reset: true }) },
+    { auth: false },
+  );
+
+// ── Reading the card ─────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/kyc/route.ts
+
+/**
+ * What the OCR made of the photograph.
+ *
+ * ── `engine` IS THE FIELD THAT MATTERS, AND IT IS NOT COSMETIC ───────────────
+ * With no GOOGLE_CLOUD_API_KEY configured, performIdOcr() falls back to a
+ * SEEDED SIMULATION: it returns a plausible name, a plausible date of birth and
+ * a confidence of 88-99 **without opening the image at all**. That is the right
+ * behaviour for the pipeline — a missing vendor key should not sink a
+ * verification — and it is a catastrophe on a screen, because it looks exactly
+ * like a successful read.
+ *
+ * So every surface that shows these fields must also show where they came from.
+ * A customer told "we read your card" about a name that was invented is being
+ * lied to, and an officer who believes it is worse.
+ */
+export interface IdOcr {
+  fullName: string | null;
+  idNumber: string | null;
+  dob: string | null;
+  serial: string | null;
+  /** Completeness, NOT a verdict: it counts fields found. See vision.ts. */
+  confidence: number;
+  /** "google-vision" = the card was actually read. "simulation" = it was not. */
+  engine?: "google-vision" | "simulation";
+}
+
+export interface IdStepResult {
+  success: boolean;
+  sessionId?: string;
+  mode?: string;
+  step?: string;
+  quality?: { score: number; passed: boolean; issues: string[] };
+  /** Present only when the quality gate passed. */
+  ocr?: IdOcr;
+  iprs?: { matched: boolean; name?: string | null; note?: string | null };
+  name?: { verdict: string; score: number; summary: string };
+  /** The typed ID and the read ID disagree — the customer should check. */
+  idMismatch?: boolean;
+  registryFound?: boolean;
+  gatePassed?: boolean;
+  blocked?: boolean;
+  /** The photograph was too poor to read. Not a failure — a retake. */
+  retake?: boolean;
+  message?: string;
+}
+
+/**
+ * POST /api/portal/kyc, step "id" — read the front of the card.
+ *
+ * REQUIRES A VERIFIED SESSION. A KYC session records "this face, this ID and
+ * this phone are one person" and is later promoted onto a Borrower row, so the
+ * route takes the phone from the cookie and never from the caller. That is why
+ * the capture surface sits AFTER the code in the funnel and not before it.
+ *
+ * Not idempotent in the retry sense — each call is a billed provider lookup and
+ * writes a KycCheck — so it never fails over to a second road.
+ */
+export const readIdFront = (
+  image: string,
+  opts: { nationalId?: string; sessionId?: string; bytes?: number; brightness?: number; blurVar?: number } = {},
+) =>
+  apiFetch<IdStepResult>(
+    "/api/portal/kyc",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        lenderSlug: LENDER_SLUG,
+        step: "id",
+        ...(opts.nationalId ? { nationalId: opts.nationalId } : {}),
+        ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
+        payload: {
+          image,
+          bytes: opts.bytes,
+          ...(opts.brightness != null ? { brightness: opts.brightness } : {}),
+          ...(opts.blurVar != null ? { blurVar: opts.blurVar } : {}),
+        },
+      }),
+    },
+    // A big body over a slow bundle. The default timeout is not enough for a
+    // 2MB photograph plus a Vision round trip plus a registry lookup.
+    { auth: true, timeoutMs: 45_000 },
+  );
+
 // ── Are you already a customer? ──────────────────────────────────────────────
 // connected-suite/src/app/api/portal/enrolment/route.ts
 //

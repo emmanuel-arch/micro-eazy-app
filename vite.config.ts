@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
@@ -6,7 +6,20 @@ import { VitePWA } from "vite-plugin-pwa";
 // The port is assigned in ecosystem/registry.json, once, for the whole
 // ecosystem — 5174, beside the app it replaces on 5173 so the two can be run
 // side by side and compared. Do not change it here; change it there.
-export default defineConfig({
+// ── THE CONFIG DOES NOT SEE .env BY ITSELF ──────────────────────────────────
+// This file read `process.env.VITE_SUITE_ORIGIN`, which is ALWAYS undefined
+// here: Vite loads .env into `import.meta.env` for the BUNDLE, not into
+// process.env for its own config. So the dev proxy silently fell through to the
+// production origin no matter what .env said, and every call to a route that
+// exists only on the local suite came back 404 — from a proxy that looked
+// correctly configured. `loadEnv` is the supported way to read it here.
+//
+// The third argument is "" rather than the default "VITE_": it widens the
+// prefix filter to every key. Not needed for VITE_SUITE_ORIGIN itself, but it
+// stops the next person wondering why an unprefixed override is ignored.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  return {
   plugins: [
     react(),
     tailwindcss(),
@@ -87,11 +100,15 @@ export default defineConfig({
     // explanation and it was written after this cost several days.
     proxy: {
       "/api": {
-        target: process.env.VITE_SUITE_ORIGIN ?? "https://lms.servicesuitecloud.com",
+        // `||` and .trim(), not `??` — the same trap the lender slug fell into
+        // (see lib/api/portal.ts): a key that is SET BUT EMPTY is "", which `??`
+        // happily passes through, and the fallback never fires.
+        target: env.VITE_SUITE_ORIGIN?.trim() || "https://lms.servicesuitecloud.com",
         changeOrigin: true,
         secure: true,
       },
     },
   },
-  build: { outDir: "dist", sourcemap: true, chunkSizeWarningLimit: 10000 },
+    build: { outDir: "dist", sourcemap: true, chunkSizeWarningLimit: 10000 },
+  };
 });

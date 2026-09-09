@@ -12,8 +12,7 @@
 // screen composes.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { ReactNode } from "react";
-import { Bell, ArrowLeft } from "lucide-react";
-import { ThemeToggle } from "./ThemeToggle";
+import { ArrowLeft } from "lucide-react";
 
 export function Sky({
   title,
@@ -26,7 +25,13 @@ export function Sky({
   children?: ReactNode;
 }) {
   return (
-    <header className="sky aurora relative overflow-hidden rounded-b-[28px] px-5 pb-16 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-b-[32px]">
+    // ── IT IS A CARD NOW, NOT A BAND ────────────────────────────────────────
+    // Every screen that paints a Sky is a signed-in screen, and signed-in
+    // screens sit inside AppShell's canvas — which is capped and centred with
+    // ground showing on all four sides. A header rounded only at the BOTTOM is
+    // a band that has been cut off at the top; rounded all round it is an
+    // object on the page, which is what it now is.
+    <header className="sky aurora relative overflow-hidden rounded-[24px] px-5 pb-16 pt-6">
       <div className="relative z-10 flex items-center gap-3 py-3">
         {onBack && (
           <button
@@ -38,15 +43,10 @@ export function Sky({
           </button>
         )}
         <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-[-0.02em] text-sky-ink">{title}</h1>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            aria-label="Updates"
-            className="grid h-10 w-10 place-items-center rounded-full border border-white/20 text-sky-ink transition-colors hover:bg-white/10"
-          >
-            <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
-          </button>
-          <ThemeToggle />
-        </div>
+        {/* The bell and the appearance switch used to live here, on every
+            screen. They are chrome, not content, and chrome belongs to the
+            shell — rendering them per screen put TWO appearance toggles on the
+            page the moment the shell grew one of its own. See AppShell. */}
       </div>
       <div className="relative z-10">{children}</div>
     </header>

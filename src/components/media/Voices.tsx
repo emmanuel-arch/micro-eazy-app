@@ -62,7 +62,33 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-export function Voices({ className = "" }: { className?: string }) {
+/**
+ * ── TWO LAYOUTS, ONE MECHANIC ───────────────────────────────────────────────
+ *   "card"   the phone. A scattered deck in an aspect-ratio box, copy beneath.
+ *            This is the design target and the default.
+ *   "cover"  the desktop hero. The deck FILLS its container, edge to edge, and
+ *            the copy sits over the photograph rather than under it.
+ *
+ * Why the scatter is dropped in "cover": a rotated card reads as a photograph
+ * put down on a table, which is exactly right at 358px wide inside a column. At
+ * half a 1440px screen it reads as a mistake — a full-bleed panel that is
+ * visibly crooked looks like a broken transform, not a deliberate one. So the
+ * cover layout crossfades in place, and the plates underneath stay hidden
+ * because there is no frame edge to see them peeking out from.
+ *
+ * The photography is 1400x933 — LANDSCAPE. The card layout crops that to 4:5 on
+ * a phone, which is the right trade there. Giving the desktop the same portrait
+ * box wasted two thirds of every frame and left the page letterboxed in the
+ * middle of a wide screen, which is what this variant exists to fix.
+ */
+export function Voices({
+  className = "",
+  layout = "card",
+}: {
+  className?: string;
+  layout?: "card" | "cover";
+}) {
+  const cover = layout === "cover";
   const [active, setActive] = useState(0);
   const [touched, setTouched] = useState(false);
   // Which files failed to load. A missing plate falls back to the brand
@@ -90,9 +116,13 @@ export function Voices({ className = "" }: { className?: string }) {
   const voice = VOICES[active];
 
   return (
-    <section className={`relative ${className}`} aria-roledescription="carousel" aria-label="What Micro Eazy is for">
+    <section
+      className={`relative ${cover ? "h-full w-full overflow-hidden" : ""} ${className}`}
+      aria-roledescription="carousel"
+      aria-label="What Micro Eazy is for"
+    >
       {/* ── The deck ─────────────────────────────────────────────────────── */}
-      <div className="relative aspect-[4/5] w-full sm:aspect-[5/4] lg:aspect-[4/5]">
+      <div className={cover ? "absolute inset-0" : "relative aspect-[4/5] w-full sm:aspect-[5/4] lg:aspect-[4/5]"}>
         {VOICES.map((v, i) => {
           const on = i === active;
           const angle = angleFor(i);
@@ -100,16 +130,21 @@ export function Voices({ className = "" }: { className?: string }) {
             <figure
               key={v.id}
               aria-hidden={!on}
-              className="absolute inset-3 m-0 origin-bottom overflow-hidden rounded-[26px] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              className={`absolute m-0 origin-bottom overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                cover ? "inset-0" : "inset-3 rounded-[26px]"
+              }`}
               style={{
                 background: "linear-gradient(150deg, var(--navy) 0%, var(--navy-deep) 46%, var(--green) 190%)",
-                boxShadow: "var(--shadow-lift)",
+                boxShadow: cover ? undefined : "var(--shadow-lift)",
                 // Not zero. The cards underneath were invisible at rest, which
                 // made this a slideshow that happened to rotate on the way out —
                 // the whole reason to stack photographs is that you can see
                 // there are more than one before anything moves.
-                opacity: on ? 1 : 0.45,
-                transform: on ? "rotate(0deg) scale(1)" : `rotate(${angle}deg) scale(0.9)`,
+                // In "cover" there is no frame edge for a peeking plate to be
+                // seen at, so a 0.45 underlay is just a second photograph
+                // ghosting through the top one. It crossfades instead.
+                opacity: on ? 1 : cover ? 0 : 0.45,
+                transform: on || cover ? "rotate(0deg) scale(1)" : `rotate(${angle}deg) scale(0.9)`,
                 zIndex: on ? 20 : VOICES.length - i,
               }}
             >
@@ -144,9 +179,19 @@ export function Voices({ className = "" }: { className?: string }) {
               <span
                 aria-hidden
                 className="absolute inset-0"
-                style={{ background: "linear-gradient(to top, rgb(0 4 58 / 0.78) 0%, rgb(0 4 58 / 0.12) 46%, transparent 70%)" }}
+                style={{
+                  background: cover
+                    ? "linear-gradient(to bottom, rgb(0 4 58 / 0.55) 0%, transparent 22%)"
+                    : "linear-gradient(to top, rgb(0 4 58 / 0.78) 0%, rgb(0 4 58 / 0.12) 46%, transparent 70%)",
+                }}
               />
-              <figcaption className="absolute inset-x-0 bottom-0 p-4">
+              {/* In "card" the caption sits at the foot of the plate, which is
+                  where a caption goes. In "cover" the foot of the plate is
+                  where the promise and the controls now live, so it moves to
+                  the head of the frame rather than being stacked underneath
+                  them — two things in the same corner reads as a collision, and
+                  on a short window it was one. */}
+              <figcaption className={cover ? "absolute inset-x-0 top-0 p-6 lg:p-8" : "absolute inset-x-0 bottom-0 p-4"}>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-medium text-white/85 backdrop-blur">
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--lime)" }} />
                   {v.caption}
@@ -161,8 +206,25 @@ export function Voices({ className = "" }: { className?: string }) {
           Keyed on the active index so React remounts the block and the CSS
           animation restarts. Without the key it plays once and every later
           plate's copy simply appears. */}
-      <div key={active} className="mt-5">
-        <h2 className="text-[19px] font-bold leading-[1.25] tracking-[-0.02em] text-ink">
+      {/* ── The copy and the controls ───────────────────────────────────────
+          In "card" they sit BELOW the deck, in page ink, as a caption does. In
+          "cover" they sit ON the photograph, in white, over a scrim — so the
+          hero is one object rather than a picture with a paragraph stuck under
+          it. Same markup, same key, same animation; only where it lands moves. */}
+      <div className={cover ? "absolute inset-x-0 bottom-0 z-30 p-8 lg:p-10" : ""}>
+      {cover && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[420px]"
+          style={{ background: "linear-gradient(to top, rgb(0 4 58 / 0.92) 0%, rgb(0 4 58 / 0.55) 45%, transparent 100%)" }}
+        />
+      )}
+      <div key={active} className={cover ? "max-w-[46ch]" : "mt-5"}>
+        <h2
+          className={`font-bold leading-[1.25] tracking-[-0.02em] ${
+            cover ? "text-[30px] text-white xl:text-[34px]" : "text-[19px] text-ink"
+          }`}
+        >
           {voice.title.split(" ").map((word, i) => (
             <span
               key={`${word}-${i}`}
@@ -173,7 +235,12 @@ export function Voices({ className = "" }: { className?: string }) {
             </span>
           ))}
         </h2>
-        <p className="voice-word mt-2 text-[13.5px] leading-relaxed text-ink-soft" style={{ animationDelay: "0.28s" }}>
+        <p
+          className={`voice-word mt-2 leading-relaxed ${
+            cover ? "text-[15px] text-white/85" : "text-[13.5px] text-ink-soft"
+          }`}
+          style={{ animationDelay: "0.28s" }}
+        >
           {voice.body}
         </p>
       </div>
@@ -184,7 +251,11 @@ export function Voices({ className = "" }: { className?: string }) {
           type="button"
           onClick={() => go(-1)}
           aria-label="Previous"
-          className="grid h-8 w-8 place-items-center rounded-full border border-line text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
+          className={`grid h-8 w-8 place-items-center rounded-full border transition-colors ${
+            cover
+              ? "border-white/30 text-white/80 hover:bg-white/15 hover:text-white"
+              : "border-line text-ink-soft hover:bg-surface-sunk hover:text-ink"
+          }`}
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={2.2} />
         </button>
@@ -192,7 +263,11 @@ export function Voices({ className = "" }: { className?: string }) {
           type="button"
           onClick={() => go(1)}
           aria-label="Next"
-          className="grid h-8 w-8 place-items-center rounded-full border border-line text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
+          className={`grid h-8 w-8 place-items-center rounded-full border transition-colors ${
+            cover
+              ? "border-white/30 text-white/80 hover:bg-white/15 hover:text-white"
+              : "border-line text-ink-soft hover:bg-surface-sunk hover:text-ink"
+          }`}
         >
           <ArrowRight className="h-4 w-4" strokeWidth={2.2} />
         </button>
@@ -213,11 +288,12 @@ export function Voices({ className = "" }: { className?: string }) {
               className="h-1.5 rounded-full transition-all duration-300"
               style={{
                 width: i === active ? "1.35rem" : "0.375rem",
-                background: i === active ? "var(--green-ink)" : "var(--line-strong)",
+                background: i === active ? (cover ? "var(--lime)" : "var(--green-ink)") : cover ? "rgb(255 255 255 / 0.4)" : "var(--line-strong)",
               }}
             />
           ))}
         </span>
+      </div>
       </div>
     </section>
   );

@@ -33,12 +33,11 @@
 // app asked the server who they were would have been much later, on a screen
 // that assumed it already knew.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Phone, ShieldCheck } from "lucide-react";
-import { Voices } from "../components/media/Voices";
+import { ArrowRight, KeyRound, Phone, ShieldCheck, UserPlus } from "lucide-react";
 import { LiquidButton } from "../components/ui/LiquidButton";
-import { ThemeToggle } from "../components/shell/ThemeToggle";
+import { AuthLayout } from "../components/shell/AuthLayout";
 import { useSession } from "../lib/session";
 
 /**
@@ -57,6 +56,10 @@ export default function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
+  /** Which button submitted the form. A ref and not state on purpose: it is
+   *  read once inside the submit handler that the click itself triggers, and as
+   *  state it would need a render to land before submit could see it. */
+  const intentRef = useRef<"continue" | "join">("continue");
 
   const ok = looksLikeAPhone(phone);
 
@@ -93,129 +96,155 @@ export default function Welcome() {
 
     // The phone travels in route state, not in the URL: a number in an address
     // bar ends up in history, in screenshots, and in shared links.
-    navigate("/verify", { state: { phone } });
+    // The phone travels in route state, not in the URL. `intent` rides with it
+    // so somebody who pressed "Create an account" goes straight to onboarding
+    // once the code is in, rather than through the returning-or-new branch.
+    navigate("/verify", { state: { phone, intent: intentRef.current } });
   };
 
-  return (
-    <div className="min-h-full">
-      {/* ── The band ───────────────────────────────────────────────────────
-          A short one. The sky on every other screen is a header carrying a
-          title; here it is just enough colour to seat the wordmark, because the
-          photographs below are doing the work that a gradient does elsewhere. */}
-      <header className="sky aurora relative overflow-hidden rounded-b-[28px] px-5 pb-10 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-b-[32px]">
-        <div className="relative z-10 flex items-center gap-3 py-2">
-          {/* The ACTUAL icon that is about to land on the home screen, on the
-              white chip — the same treatment the app it replaces uses on this
-              exact screen. A translucent white plate would let the navy band
-              show through a mark that is itself navy, and the M would vanish
-              into it. Solid white is what a launcher gives it anyway. */}
-          <span
-            className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white"
-            style={{ boxShadow: "0 10px 24px -10px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.28)" }}
+  // ── The form column ────────────────────────────────────────────────────────
+  // Extracted because it is rendered once but LAID OUT twice: under the deck on
+  // a phone, beside a full-bleed photograph on a laptop. Duplicating the markup
+  // to achieve that is how the two copies drift apart, and a sign-in form that
+  // is subtly different at one breakpoint is a bug nobody notices until it is in
+  // somebody's hands.
+  const form = (
+    <div className="w-full">
+      <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink lg:text-[30px]">Welcome.</h1>
+      <p className="mt-2 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
+        Enter the number your M-Pesa is on. That is the whole of it — we will take you through the rest one step at a
+        time.
+      </p>
+
+      <form onSubmit={submit} className="mt-6">
+        <label htmlFor="phone" className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+          Phone number
+        </label>
+        <div
+          className="mt-2 flex items-center gap-2.5 rounded-2xl border px-4 transition-colors focus-within:border-[var(--green-ink)]"
+          style={{ background: "var(--surface)", borderColor: touched && !ok ? "var(--line-strong)" : "var(--line)" }}
+        >
+          <Phone className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2} />
+          <span className="shrink-0 text-[15px] font-medium text-ink-soft">+254</span>
+          <input
+            id="phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            placeholder="7XX XXX XXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            aria-invalid={touched && !ok}
+            aria-describedby={touched && !ok ? "phone-error" : undefined}
+            className="tnum min-w-0 flex-1 bg-transparent py-4 text-[16px] text-ink outline-none placeholder:text-ink-faint"
+          />
+        </div>
+        {/* Only after a submit. Marking a field wrong while somebody is still
+            typing the first digit of it is how a form tells people they are
+            failing at something they have not finished. */}
+        {touched && !ok && (
+          <p id="phone-error" className="mt-2 text-[12.5px] text-ink-soft">
+            That does not look like a full number yet — nine digits after the +254.
+          </p>
+        )}
+
+        {/* The server's own words, not a generic failure. It is the thing that
+            knows about rate limits ("too many codes for this number"), and
+            rewriting that as "something went wrong" would hide the one
+            instruction the customer can act on. */}
+        {error && (
+          <p role="alert" className="mt-3 text-[12.5px] font-medium leading-snug" style={{ color: "#e11d48" }}>
+            {error}
+          </p>
+        )}
+        {devCode && !error && (
+          <p
+            className="mt-3 rounded-lg px-3 py-2 text-[12.5px] leading-snug text-ink-soft"
+            style={{ background: "var(--surface-sunk)" }}
           >
-            <img
-              src="/brand/micro-eazy/icon-192.png"
-              alt=""
-              width={40}
-              height={40}
-              className="h-10 w-10 object-contain"
-              aria-hidden="true"
-            />
-          </span>
-          <span className="min-w-0 flex-1 leading-none">
-            <span className="block text-[16px] font-bold tracking-[-0.02em] text-sky-ink">Micro Eazy</span>
-            <span className="block pt-1 text-[11.5px] text-sky-ink-soft">Quick loans. Better living.</span>
-          </span>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* ── The two halves ────────────────────────────────────────────────
-          `lg:items-center` rather than `items-start`: the form is much shorter
-          than the deck, and pinned to the top it leaves a column of empty page
-          under it that reads as a screen that failed to finish loading. */}
-      <div className="mx-auto grid w-full max-w-[560px] gap-8 px-4 pb-16 pt-6 lg:max-w-[1080px] lg:grid-cols-2 lg:items-center lg:gap-14 lg:pt-10">
-        <Voices />
-
-        <div>
-          <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink">
-            Welcome.
-          </h1>
-          <p className="mt-2 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
-            Enter the number your M-Pesa is on. That is the whole of it — we will take you through the rest one step
-            at a time.
+            SMS is not configured here, so no message will arrive — your code is{" "}
+            <strong className="tnum font-semibold text-ink">{devCode}</strong>.
           </p>
+        )}
 
-          <form onSubmit={submit} className="mt-6">
-            <label htmlFor="phone" className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
-              Phone number
-            </label>
-            <div
-              className="mt-2 flex items-center gap-2.5 rounded-2xl border px-4 transition-colors focus-within:border-[var(--green-ink)]"
-              style={{ background: "var(--surface)", borderColor: touched && !ok ? "var(--line-strong)" : "var(--line)" }}
-            >
-              <Phone className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2} />
-              <span className="shrink-0 text-[15px] font-medium text-ink-soft">+254</span>
-              <input
-                id="phone"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel-national"
-                placeholder="7XX XXX XXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                aria-invalid={touched && !ok}
-                aria-describedby={touched && !ok ? "phone-error" : undefined}
-                className="tnum min-w-0 flex-1 bg-transparent py-4 text-[16px] text-ink outline-none placeholder:text-ink-faint"
-              />
-            </div>
-            {/* Only after a submit. Marking a field wrong while somebody is
-                still typing the first digit of it is how a form tells people
-                they are failing at something they have not finished. */}
-            {touched && !ok && (
-              <p id="phone-error" className="mt-2 text-[12.5px] text-ink-soft">
-                That does not look like a full number yet — nine digits after the +254.
-              </p>
-            )}
+        <LiquidButton
+          type="submit"
+          size="lg"
+          block
+          trailingIcon={ArrowRight}
+          className="mt-5"
+          loading={busy}
+          disabled={busy}
+          onClick={() => {
+            intentRef.current = "continue";
+          }}
+        >
+          {busy ? "Sending your code" : "Continue"}
+        </LiquidButton>
 
-            {/* The server's own words, not a generic failure. It is the thing
-                that knows about rate limits ("too many codes for this number"),
-                and rewriting that as "something went wrong" would hide the one
-                instruction the customer can act on. */}
-            {error && (
-              <p role="alert" className="mt-3 text-[12.5px] font-medium leading-snug" style={{ color: "#e11d48" }}>
-                {error}
-              </p>
-            )}
-            {devCode && !error && (
-              <p className="mt-3 rounded-lg px-3 py-2 text-[12.5px] leading-snug text-ink-soft" style={{ background: "var(--surface-sunk)" }}>
-                SMS is not configured here, so no message will arrive — your code is{" "}
-                <strong className="tnum font-semibold text-ink">{devCode}</strong>.
-              </p>
-            )}
+        {/* ── THE CREATE-ACCOUNT DOOR ───────────────────────────────────────
+            Same code, same gate, different destination. It submits the form
+            like the button above it — the code still has to reach the handset
+            first — and only sets where the customer lands afterwards.
 
-            <LiquidButton
-              type="submit"
-              size="lg"
-              block
-              trailingIcon={ArrowRight}
-              className="mt-5"
-              loading={busy}
-              disabled={busy}
-            >
-              {busy ? "Sending your code" : "Continue"}
-            </LiquidButton>
-          </form>
+            It grants nothing. Onboarding is still behind the session, the KYC
+            endpoint still demands one, and the enrolment check still runs. So
+            somebody who presses this and IS already a customer is told so and
+            sent to sign in, which is exactly what should happen. */}
+        <button
+          type="submit"
+          onClick={() => {
+            intentRef.current = "join";
+          }}
+          disabled={busy}
+          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border py-3.5 text-[13.5px] font-semibold transition-colors hover:bg-surface-sunk disabled:opacity-60"
+          style={{ borderColor: "var(--line-strong)", color: "var(--navy-ink)" }}
+        >
+          <UserPlus className="h-4 w-4" strokeWidth={2.2} />
+          Create an account
+        </button>
+      </form>
 
-          <p className="mt-4 flex items-start gap-2 text-[12px] leading-relaxed text-ink-faint">
-            <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" style={{ color: "var(--green-ink)" }} />
-            <span>
-              We check your number against your national ID before any money moves. Nothing is shared with anyone who
-              is not lending to you.
+      {/* ── THE EXISTING CUSTOMER'S DOOR ─────────────────────────────────────
+          Not a footnote, because on day one it is the door MOST people need:
+          Micromart's existing book already holds a password, sent by SMS from
+          Micromart's own outbox. Making those customers wait for a second code
+          to reach the same handset is friction with nothing behind it. */}
+      <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--line)" }}>
+        <button
+          type="button"
+          onClick={() => navigate("/signin")}
+          className="flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-surface-sunk active:scale-[0.99]"
+          style={{ borderColor: "var(--line-strong)" }}
+        >
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
+          >
+            <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-semibold leading-tight">Already with Micromart?</span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
+              Sign in with the password they sent you.
             </span>
-          </p>
-        </div>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+        </button>
       </div>
+
+      <p className="mt-4 flex items-start gap-2 text-[12px] leading-relaxed text-ink-faint">
+        <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" style={{ color: "var(--green-ink)" }} />
+        <span>
+          We check your number against your national ID before any money moves. Nothing is shared with anyone who is
+          not lending to you.
+        </span>
+      </p>
     </div>
   );
+
+  // The frame — mark top-left, content left of centre, photography sliding down
+  // the right — belongs to the whole front-of-house flow, not to this screen.
+  // See components/shell/AuthLayout.tsx.
+  return <AuthLayout deckOnMobile>{form}</AuthLayout>;
 }
