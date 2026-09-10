@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // THE MARK.
 //
-// One component, because the rule about when it wears a white chip is a rule
-// about SURFACES, and it was previously copied into four files that could each
-// get it wrong independently.
+// One component, because the rule about how it is framed is a rule about
+// SURFACES, and it was previously copied into four files that could each get it
+// wrong independently.
 //
 // ── THE RULE ────────────────────────────────────────────────────────────────
 // The mark is navy-and-green artwork on transparency. On paper it needs
@@ -17,24 +17,40 @@
 // CSS by what it is sitting on (see .brand-chip in styles/theme.css), not from
 // a prop each caller has to remember to pass.
 //
-// ── SIZE ────────────────────────────────────────────────────────────────────
-// Bigger than it was, everywhere. At 36-40px inside a chip the mark was a
-// favicon; the logo is the one element on the front door doing the work of
-// saying whose money this is, and it should be read as a logo at a glance.
-// `size` is the box; the artwork is object-contain inside it, so it never
-// distorts whatever the file's aspect ratio happens to be.
+// ── SIZE, AND WHY THE WORDMARK IS GONE ──────────────────────────────────────
+// The mark used to appear at 40–54px with the words "Micro Eazy / Quick loans.
+// Better living." set beside it. That arrangement lost twice: the mark was too
+// small to read as a logo, and the strapline was 11px grey text nobody read.
+// Two weak elements sharing 200px, where one strong one belongs.
+//
+// The words are gone from the chrome and the mark is large enough to do the job
+// alone — which is what a logo is for. `size` is the box; the artwork is
+// object-contain inside it, so it never distorts whatever the file's aspect
+// ratio happens to be.
+//
+// ── `framed` ────────────────────────────────────────────────────────────────
+// The plate treatment (see .brand-plate in styles/theme.css). Used where the
+// mark has to HOLD a corner on its own rather than sit inside a band that is
+// already carrying the brand: the sidebar's letterhead and the front door. It
+// is a presentation of this component and not a separate one, so the two cannot
+// drift apart the way the four hand-rolled copies did.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function BrandMark({
   size = 52,
+  framed = false,
   className = "",
 }: {
+  /** The box the artwork is contained in. With `framed`, the plate's padding
+   *  sits OUTSIDE this, so a framed 56 is a ~76px plate. */
   size?: number;
+  /** Wear the plate — for the corners the mark has to hold by itself. */
+  framed?: boolean;
   className?: string;
 }) {
-  return (
+  const mark = (
     <span
-      className={`brand-chip grid shrink-0 place-items-center overflow-hidden ${className}`}
+      className={`brand-chip grid shrink-0 place-items-center overflow-hidden ${framed ? "" : className}`}
       style={{ width: size, height: size }}
     >
       <img
@@ -43,12 +59,16 @@ export function BrandMark({
         width={size}
         height={size}
         className="h-full w-full object-contain"
-        // Decorative: the wordmark beside it already says "Micro Eazy", and a
-        // screen reader announcing the name twice is noise.
+        // Decorative when a wordmark or an aria-label names the product. Every
+        // caller that drops the visible name provides one — see AppShell's
+        // BrandBlock and AuthLayout's header.
         aria-hidden="true"
       />
     </span>
   );
+
+  if (!framed) return mark;
+  return <span className={`brand-plate shrink-0 ${className}`}>{mark}</span>;
 }
 
 export default BrandMark;

@@ -569,11 +569,21 @@ export const SAMPLE_HOME: HomeResponse = {
     { seq: 6, due: "2026-09-19", amount: 2_600, status: "UPCOMING" },
   ],
   score: 712,
+  scoreMax: 900,
   band: "Kuza",
+  scoreTone: "good",
+  scoreDrivers: [
+    { factor: "Longer account history", direction: "reduces" },
+    { factor: "Payments made on time", direction: "reduces" },
+    { factor: "Larger loan amounts", direction: "increases" },
+  ],
   // Their `CreditScore` field is average daily SALES, not a score — 30,000 a day
   // is what the live account returns. Named correctly here so nobody is ever
   // tempted to render it against a 900 denominator.
   avgDailySales: 30_000,
+  // A pot with something in it, so the offline review surface exercises the
+  // populated case. The empty and the unreadable cases are both live-only.
+  savings: { balance: 1_670, lastAmount: 1_670, lastAt: "2026-09-10T20:38:55.803Z" },
   ratiba: { available: true, active: true, amount: 2_600, frequency: "WEEKLY" },
   unreadMessages: 1,
   messages: [

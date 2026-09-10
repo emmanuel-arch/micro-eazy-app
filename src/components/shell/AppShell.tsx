@@ -84,20 +84,30 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** The mark at the head of its own navigation — the console's "letterhead". */
+/**
+ * The mark at the head of its own navigation — the console's "letterhead".
+ *
+ * ── WHY THE WORDS WENT AND THE MARK GREW ────────────────────────────────────
+ * This was a 40px mark with "Micro Eazy" at 14px and "Quick loans. Better
+ * living." at 10.5px stacked beside it. Three elements competing inside a
+ * 236px rail, none of them winning: the mark too small to read as a logo, the
+ * name too small to be a wordmark, and a strapline at a size nobody reads.
+ *
+ * Now the mark holds the corner by itself, centred and plated, at a size that
+ * reads as an identity rather than as a favicon. The name it used to spell out
+ * lives on the link's aria-label, where it does more good — a screen reader
+ * announced "Micro Eazy Quick loans. Better living. home" before, which is
+ * three phrases for one destination.
+ */
 function BrandBlock({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <NavLink
       to="/"
       onClick={onNavigate}
       aria-label="Micro Eazy — home"
-      className="mx-2 mb-2 mt-2 flex shrink-0 items-center gap-2.5 rounded-xl px-2.5 py-3 transition-colors hover:bg-surface-sunk"
+      className="mx-2 mb-3 mt-3 flex shrink-0 items-center justify-center rounded-2xl px-2.5 py-2 transition-colors"
     >
-      <BrandMark size={40} />
-      <span className="min-w-0 leading-none">
-        <span className="block truncate text-[14px] font-bold tracking-[-0.02em] text-ink">Micro Eazy</span>
-        <span className="mt-1 block truncate text-[10.5px] text-ink-faint">Quick loans. Better living.</span>
-      </span>
+      <BrandMark size={62} framed />
     </NavLink>
   );
 }
@@ -138,6 +148,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen gap-3 px-3 pb-6 pt-3 sm:gap-5 sm:px-5 lg:gap-6 lg:px-6">
         <aside className="card sticky top-3 hidden h-[calc(100vh-1.5rem)] w-[236px] shrink-0 overflow-y-auto rounded-2xl lg:block">
           <BrandBlock />
+          {/* A hairline under the letterhead. Without it the plate floats above
+              the list and reads as the first (oversized) nav row rather than as
+              the head of the page. */}
+          <div className="mx-4 mb-3 border-t" style={{ borderColor: "var(--line)" }} />
           <NavItems />
         </aside>
 

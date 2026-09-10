@@ -38,7 +38,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Eye, EyeOff, KeyRound, Phone, TriangleAlert, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, MessageSquare, Phone, TriangleAlert, UserPlus } from "lucide-react";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { AuthLayout } from "../components/shell/AuthLayout";
 import { useSession } from "../lib/session";
@@ -50,7 +50,7 @@ const looksLikeAPhone = (v: string) => v.replace(/\D/g, "").length >= 9;
 
 export default function SignInPassword() {
   const navigate = useNavigate();
-  const { status, signInWithPassword, resetPassword } = useSession();
+  const { status, signInWithPassword, resetPassword, requestCode } = useSession();
 
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -58,6 +58,9 @@ export default function SignInPassword() {
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
+  /** The code is the default door; the password is opened by asking for it. */
+  const [usePassword, setUsePassword] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** A failure that retyping cannot fix — ambiguous, or nobody reachable. It
    *  gets a panel rather than a red line, because the instruction is different. */
@@ -77,6 +80,65 @@ export default function SignInPassword() {
   }, [status, navigate]);
 
   const ok = looksLikeAPhone(phone) && password.trim().length > 0;
+
+  /**
+   * Send a verification code to this number and hand off to the gate.
+   *
+   * ── IT GOES THROUGH MICROMART'S OWN OUTBOX ────────────────────────────────
+   * `requestCode` posts to /api/portal/otp, and for a bridged lender the server
+   * dispatches through `Notifications.dbo.sp_InsertsmsAndEmails` on the
+   * lender's own database — the same procedure their `RepaymentTrigger` calls
+   * after every repayment. Their drainer then sends it under the sender id
+   * registered to the entity.
+   *
+   * That is the whole point of routing it that way rather than through a
+   * provider of ours: a verification code arriving from a name the customer has
+   * never dealt with is indistinguishable from a phishing attempt, and it
+   * trains people to trust exactly the message they should not.
+   *
+   * ── IT GRANTS NOTHING ─────────────────────────────────────────────────────
+   * Sending a code is not a session. The gate at /verify verifies it against
+   * the server and mints the cookie; nothing typed on this screen opens a
+   * single screen behind it.
+   */
+  async function onSendCode() {
+    if (sending || busy) return;
+    setTouched(true);
+    if (!looksLikeAPhone(phone)) {
+      setError("Enter the phone number your Micromart account is on.");
+      phoneRef.current?.focus();
+      return;
+    }
+    setSending(true);
+    setError(null);
+    setHeld(null);
+    setNotice(null);
+    const r = await requestCode(phone);
+    setSending(false);
+
+    if (!r.ok) {
+      setError(r.message);
+      return;
+    }
+
+    // `delivered: false` still arrives as success — the request was accepted and
+    // no provider could send it. Moving on silently would park somebody on a
+    // code screen waiting for an SMS that is not coming, so this stops and says
+    // so, and points at the door that still works.
+    if (!r.delivered && !r.devCode) {
+      setHeld({
+        title: "We could not send the code",
+        body:
+          "Your number is fine — the SMS channel did not accept it just now. Try again in a moment, or sign in with the Micromart password below if you have it.",
+      });
+      setUsePassword(true);
+      return;
+    }
+
+    // The phone travels in route state, not in the URL: a number in an address
+    // bar ends up in history, in screenshots and in shared links.
+    navigate("/verify", { state: { phone, intent: "continue" } });
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -148,7 +210,8 @@ export default function SignInPassword() {
       <div>
         <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink">Welcome back.</h1>
         <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
-          Sign in with the password Micromart sent you by SMS. If you have never had one, ask for it below.
+          Enter the number your Micromart account is on. We send a code to it — or use the password they SMS'd you, if
+          you still have it.
         </p>
 
         <form onSubmit={submit} className="mt-6">
@@ -178,10 +241,89 @@ export default function SignInPassword() {
             />
           </div>
 
+          {/* ── THE CODE, FIRST ─────────────────────────────────────────────
+              This screen used to open with a password field and nothing else.
+              That was right for the credential Micromart's book already holds —
+              and wrong for the person actually standing in front of it, who as
+              often as not deleted that SMS months ago, or never received one,
+              or is looking at a thread of forty messages trying to find it.
+
+              A code is the door that always works: it goes to the handset they
+              are holding, through Micromart's own outbox, under Micromart's own
+              sender id — so it arrives from the name they already trust rather
+              than from a stranger. Nothing about the password door is removed;
+              it moves below, for the customer who has the password in hand and
+              is faster with it.
+
+              The code path lands on the SAME gate the front door uses, so there
+              is one screen in this app where a six-digit code is entered and
+              one place that decides what happens after it. */}
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={onSendCode}
+              disabled={sending || busy}
+              className="glass-option glass-option--primary px-4 py-3.5"
+            >
+              <span
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                style={{ background: "color-mix(in oklab, var(--green) 22%, transparent)", color: "var(--green-ink)" }}
+              >
+                {sending ? (
+                  <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.4} />
+                ) : (
+                  <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.3} />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-bold leading-tight text-ink">
+                  {sending ? "Sending your code" : "Send me a code"}
+                </span>
+                <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
+                  {sending ? "One moment." : "Arrives by SMS from Micromart."}
+                </span>
+              </span>
+              {!sending && <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />}
+            </button>
+          </div>
+
+          {/* ── OR, THE PASSWORD ────────────────────────────────────────────
+              Collapsed by default. Present and one tap away for the customer
+              who has it — hiding it entirely would throw away the faster path
+              for the book that already holds the credential. */}
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">or</span>
+            <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+          </div>
+
+          {!usePassword && (
+            <button
+              type="button"
+              onClick={() => setUsePassword(true)}
+              className="glass-option px-4 py-3.5"
+            >
+              <span
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
+              >
+                <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-bold leading-tight text-ink">Use my Micromart password</span>
+                <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
+                  The one they sent you by SMS.
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+            </button>
+          )}
+
           {/* ── Password ──────────────────────────────────────────────────── */}
+          <div hidden={!usePassword}>
           <label
             htmlFor="signin-password"
-            className="mt-4 block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint"
+            className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint"
           >
             Password
           </label>
@@ -221,6 +363,7 @@ export default function SignInPassword() {
               {resetting ? "Asking Micromart…" : "Send me a new password"}
             </button>
           </div>
+          </div>
 
           {error && (
             <p role="alert" className="mt-3 text-[12.5px] font-medium leading-snug" style={{ color: "#e11d48" }}>
@@ -249,9 +392,11 @@ export default function SignInPassword() {
             </section>
           )}
 
-          <LiquidButton type="submit" size="lg" block trailingIcon={ArrowRight} className="mt-5" loading={busy} disabled={busy}>
-            {busy ? "Signing you in" : "Sign in"}
-          </LiquidButton>
+          {usePassword && (
+            <LiquidButton type="submit" size="lg" block trailingIcon={ArrowRight} className="mt-5" loading={busy} disabled={busy}>
+              {busy ? "Signing you in" : "Sign in"}
+            </LiquidButton>
+          )}
         </form>
 
         {/* ── The other door ─────────────────────────────────────────────────

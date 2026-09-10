@@ -35,8 +35,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, KeyRound, Phone, ShieldCheck, UserPlus } from "lucide-react";
-import { LiquidButton } from "../components/ui/LiquidButton";
+import { ArrowRight, Info, KeyRound, Loader2, Phone, UserPlus } from "lucide-react";
 import { AuthLayout } from "../components/shell/AuthLayout";
 import { useSession } from "../lib/session";
 
@@ -167,79 +166,126 @@ export default function Welcome() {
           </p>
         )}
 
-        <LiquidButton
-          type="submit"
-          size="lg"
-          block
-          trailingIcon={ArrowRight}
-          className="mt-5"
-          loading={busy}
-          disabled={busy}
-          onClick={() => {
-            intentRef.current = "continue";
-          }}
-        >
-          {busy ? "Sending your code" : "Continue"}
-        </LiquidButton>
+        {/* ── THE THREE DOORS, AS ONE FAMILY ────────────────────────────────
+            They used to be three different species: a saturated green pill, a
+            hairline outlined button, and a bordered row with an icon. The
+            hierarchy that created was wrong — it read as one real option and
+            two afterthoughts, when "Already with Micromart?" is the door MOST
+            people need on day one. Micromart's existing book is tens of
+            thousands of people who already hold a password sent from
+            Micromart's own outbox.
 
-        {/* ── THE CREATE-ACCOUNT DOOR ───────────────────────────────────────
-            Same code, same gate, different destination. It submits the form
-            like the button above it — the code still has to reach the handset
-            first — and only sets where the customer lands afterwards.
+            Now they are one material at one weight, separated by ACCENT: the
+            first carries the brand light, the other two do not. Emphasis within
+            a set, rather than three different classes of thing. See
+            .glass-option in styles/theme.css. */}
+        <div className="mt-5 space-y-2.5">
+          <button
+            type="submit"
+            onClick={() => {
+              intentRef.current = "continue";
+            }}
+            disabled={busy}
+            className="glass-option glass-option--primary px-4 py-3.5"
+          >
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+              style={{ background: "color-mix(in oklab, var(--green) 22%, transparent)", color: "var(--green-ink)" }}
+            >
+              {busy ? (
+                <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.4} />
+              ) : (
+                <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-bold leading-tight text-ink">
+                {busy ? "Sending your code" : "Continue"}
+              </span>
+              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
+                {busy ? "One moment." : "We send a code to this number."}
+              </span>
+            </span>
+          </button>
 
-            It grants nothing. Onboarding is still behind the session, the KYC
-            endpoint still demands one, and the enrolment check still runs. So
-            somebody who presses this and IS already a customer is told so and
-            sent to sign in, which is exactly what should happen. */}
-        <button
-          type="submit"
-          onClick={() => {
-            intentRef.current = "join";
-          }}
-          disabled={busy}
-          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border py-3.5 text-[13.5px] font-semibold transition-colors hover:bg-surface-sunk disabled:opacity-60"
-          style={{ borderColor: "var(--line-strong)", color: "var(--navy-ink)" }}
-        >
-          <UserPlus className="h-4 w-4" strokeWidth={2.2} />
-          Create an account
-        </button>
+          {/* Same code, same gate, different destination. It submits the form
+              like the card above it — the code still has to reach the handset
+              first — and only sets where the customer lands afterwards.
+
+              It grants nothing. Onboarding is still behind the session, the KYC
+              endpoint still demands one, and the enrolment check still runs. So
+              somebody who presses this and IS already a customer is told so and
+              sent to sign in, which is exactly what should happen. */}
+          <button
+            type="submit"
+            onClick={() => {
+              intentRef.current = "join";
+            }}
+            disabled={busy}
+            className="glass-option px-4 py-3.5"
+          >
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+              style={{ background: "color-mix(in oklab, var(--lime) 20%, transparent)", color: "var(--green-ink)" }}
+            >
+              <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-bold leading-tight text-ink">Create an account</span>
+              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
+                New here? It takes about two minutes.
+              </span>
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+          </button>
+
+          {/* Not a footnote. On day one this is the door most people need. */}
+          <button
+            type="button"
+            onClick={() => navigate("/signin")}
+            disabled={busy}
+            className="glass-option px-4 py-3.5"
+          >
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+              style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
+            >
+              <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-bold leading-tight text-ink">Already with Micromart?</span>
+              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
+                Sign in with the password they sent you.
+              </span>
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+          </button>
+        </div>
       </form>
 
-      {/* ── THE EXISTING CUSTOMER'S DOOR ─────────────────────────────────────
-          Not a footnote, because on day one it is the door MOST people need:
-          Micromart's existing book already holds a password, sent by SMS from
-          Micromart's own outbox. Making those customers wait for a second code
-          to reach the same handset is friction with nothing behind it. */}
-      <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--line)" }}>
-        <button
-          type="button"
-          onClick={() => navigate("/signin")}
-          className="flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-surface-sunk active:scale-[0.99]"
-          style={{ borderColor: "var(--line-strong)" }}
-        >
-          <span
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-            style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
-          >
-            <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13.5px] font-semibold leading-tight">Already with Micromart?</span>
-            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
-              Sign in with the password they sent you.
-            </span>
-          </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
-        </button>
-      </div>
+      {/* ── THE ASSURANCE ───────────────────────────────────────────────────
+          This was 12px grey text set directly on the page. On a laptop that
+          page is a photograph, and the one sentence on the screen whose entire
+          job is to be BELIEVED before somebody types a national ID number was
+          the least legible thing on it.
 
-      <p className="mt-4 flex items-start gap-2 text-[12px] leading-relaxed text-ink-faint">
-        <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" style={{ color: "var(--green-ink)" }} />
-        <span>
+          It now sits on a solid ground of its own — not glass, because this is
+          the sentence that must never be at the mercy of what is behind it —
+          and leads with a notice mark rather than a shield, because it is
+          telling the customer something they need to take in, not decorating
+          the claim with a security motif. */}
+      <div className="assurance mt-5 flex items-start gap-3 p-3.5">
+        <span
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+          style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
+        >
+          <Info className="h-[17px] w-[17px]" strokeWidth={2.4} />
+        </span>
+        <p className="text-[12px] leading-relaxed text-ink-soft">
           We check your number against your national ID before any money moves. Nothing is shared with anyone who is
           not lending to you.
-        </span>
-      </p>
+        </p>
+      </div>
     </div>
   );
 

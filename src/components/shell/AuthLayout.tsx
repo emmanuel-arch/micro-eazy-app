@@ -62,24 +62,39 @@ export function AuthLayout({
             a full-bleed photograph is two surfaces competing to be the subject,
             and the photograph should win. See .sky-phone-only in theme.css. */}
         <header className="sky aurora sky-phone-only relative shrink-0 overflow-hidden rounded-b-[28px] px-5 pb-8 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-none lg:px-10 lg:pb-0 lg:pt-9">
-          <div className="relative z-10 flex items-center gap-3 py-2">
-            {/* ── THE MARK ─────────────────────────────────────────────────
+          {/* ── ALIGNED TO THE COLUMN, NOT TO THE WINDOW ────────────────────
+              The content below is centred inside a 420px column (see the
+              wrapper further down), so a mark pinned to the header's own `px-10`
+              sat ~120px to the left of the "Welcome." it belongs to. Two
+              left edges in a layout that has room for one reads as an accident.
+              The same max-width and centring here puts the mark directly above
+              the first line of type, which is what makes it look placed rather
+              than parked. Below `lg` this is a no-op: the navy band is
+              full-bleed and the mark belongs in its corner. */}
+          <div className="relative z-10 flex items-start justify-between gap-3 py-2 lg:mx-auto lg:max-w-[420px]">
+            {/* ── THE MARK, ON ITS OWN ─────────────────────────────────────
                 connected-suite/public/images/logo.png, the same file the LMS
                 console uses, so the borrower app and the staff console show one
                 identity rather than two that merely resemble each other.
 
-                The white chip is no longer wired in here: it is a property of
-                the SURFACE, and the .sky band is navy in both themes while
-                paper is not. See .brand-chip in styles/theme.css. */}
-            <BrandMark size={54} />
-            <span className="min-w-0 flex-1 leading-none">
-              <span className="block text-[16px] font-bold tracking-[-0.02em] text-sky-ink lg:text-ink">Micro Eazy</span>
-              <span className="block pt-1 text-[11.5px] text-sky-ink-soft lg:text-ink-faint">
-                Quick loans. Better living.
-              </span>
-            </span>
+                THE WORDS ARE GONE. "Micro Eazy / Quick loans. Better living."
+                used to sit beside this at 16px and 11.5px. On the front door —
+                the one screen whose job is to say whose money this is — that
+                read as a favicon with a caption. The mark is now large enough
+                to be read as a logo, which is the job a logo has, and the
+                accessible name moved onto the link/aria-label rather than being
+                set in grey type nobody read.
+
+                The plate (see .brand-plate) is what lets it hold the corner at
+                this size without floating: on the navy band it is the white
+                ground the navy half of the artwork needs, and on paper it is a
+                real surface with its own light. */}
+            <BrandMark size={64} framed />
             <ThemeToggle variant="band" />
           </div>
+          {/* The name, for anything that does not render pictures. The visible
+              wordmark is gone; the accessible one must not be. */}
+          <span className="sr-only">Micro Eazy</span>
         </header>
 
         {deckOnMobile && (
@@ -97,9 +112,27 @@ export function AuthLayout({
             sits hard against the window edge with a gulf of empty page beside
             it. Centred in its own half, the content reads as the subject of
             that half rather than as something that failed to lay out. */}
-        <div className="mx-auto flex w-full max-w-[560px] flex-1 items-start px-4 pb-14 pt-8 lg:my-auto lg:max-w-none lg:flex-none lg:px-10 lg:pb-12">
+        <div className="mx-auto flex w-full max-w-[560px] flex-1 items-start px-4 pb-6 pt-8 lg:my-auto lg:max-w-none lg:flex-none lg:px-10 lg:pb-6">
           <div className="w-full lg:mx-auto lg:max-w-[420px]">{children}</div>
         </div>
+
+        {/* ── THE FOOTER ─────────────────────────────────────────────────────
+            One line, at the bottom of the column the customer is reading, on
+            every front-of-house screen. It belongs to the LAYOUT and not to any
+            one screen for the same reason the frame does: a step added to the
+            funnel tomorrow should not be able to lose it.
+
+            NO `mt-auto`, deliberately. The content block above already owns the
+            free space — `flex-1` on a handset, `lg:my-auto` on a laptop — so it
+            lands at the bottom on both. Adding a third auto margin here would
+            make three of them share the slack, which stops the form being
+            centred in the landscape window and is exactly the drift the
+            landscape rule exists to catch. */}
+        <footer className="shrink-0 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-4 text-center lg:px-10">
+          <p className="text-[11.5px] font-medium tracking-[0.01em] text-ink-faint">
+            Powered by <span className="font-semibold text-ink-soft">Micro Eazy</span>
+          </p>
+        </footer>
       </div>
 
       {/* ── RIGHT: the photography, edge to edge, still sliding ─────────── */}

@@ -558,10 +558,42 @@ export const declineOffer = (offerId: string) =>
  * confirmed by Safaricom's callback, so the screen that calls this watches the
  * balance rather than believing the 200.
  */
-export const pay = (nationalId: string, amount?: number) =>
-  apiFetch<{ success: boolean; message?: string; amount?: number }>(
+/**
+ * The purposes the Pay Now sheet offers.
+ *
+ * A purpose does NOT route the money. The lender's own `RepaymentTrigger`
+ * decides where a payment lands — loan balance first, remainder to savings —
+ * and no endpoint on their side accepts a destination. What a purpose does is
+ * set the expected amount, shape the confirmation, and get RECORDED, because
+ * what a customer believed they were paying for is the first question in any
+ * dispute. See connected-suite/src/lib/portal/pay-purpose.ts, which owns the
+ * rule; `previewAllocation` below is a mirror of it for live feedback and the
+ * server's answer is the record.
+ */
+export type PayPurpose = "repayment" | "savings" | "penalty" | "processing-fee" | "crb";
+
+export interface PayAllocation {
+  purpose: PayPurpose;
+  toLoan: number;
+  toSavings: number;
+  clearsLoan: boolean;
+  /** The lender will not do what the purpose literally says — say so. */
+  divergent: boolean;
+  explanation: string;
+}
+
+export const pay = (nationalId: string, amount?: number, purpose?: PayPurpose) =>
+  apiFetch<{
+    success: boolean;
+    message?: string;
+    amount?: number;
+    purpose?: PayPurpose;
+    pushed?: boolean;
+    /** Where the lender's trigger will actually put it. Null if unreadable. */
+    allocation?: PayAllocation | null;
+  }>(
     "/api/portal/pay",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, amount }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, amount, purpose }) },
     { auth: true },
   );
 
@@ -1122,11 +1154,36 @@ export interface HomeResponse {
   } | null;
   schedule: { seq: number; due: string; amount: number; status: string }[];
 
-  /** Ours, out of 900. Null until the engine has scored them. */
+  /**
+   * ONE SCORE, ONE SCALE — 300–900 — whichever book the customer is on.
+   *
+   * For a bridged customer it comes from the deployed behavioural model, which
+   * is the only thing on that system that speaks this scale: their
+   * `Borrowers.RiskScore` is null across most of the book and their
+   * `CreditScore` column is average daily sales (see `avgDailySales`). Null
+   * still means "not scored", and the screen must not render a zero gauge for
+   * it — a customer with no score has no score, which is different from a bad
+   * one.
+   */
   score: number | null;
+  scoreMax: number;
   band: string | null;
+  /** How to colour the gauge. Null when there is no score to colour. */
+  scoreTone: "good" | "warn" | "high" | "bad" | null;
+  /** What moved it, already in plain language. Possibly empty. */
+  scoreDrivers: { factor: string; direction: "increases" | "reduces" }[];
   /** The lender's own, on the lender's own scale. Label it or drop it. */
   avgDailySales: number | null;
+
+  /**
+   * THE SAVINGS POT — `Transactions.dbo.AccountSavings` on a bridged book.
+   *
+   * Null means "we could not ask". A present object with `balance: 0` means
+   * "you have saved nothing yet". Those are different sentences and the screen
+   * has to be able to tell them apart — the same distinction `bookSource`
+   * draws for the loan balance, and for the same reason.
+   */
+  savings: { balance: number; lastAmount: number | null; lastAt: string | null } | null;
 
   /** Our own Ratiba debits into OUR books, so it is meaningful only for a
    *  native lender. `available: false` is reported rather than the block being

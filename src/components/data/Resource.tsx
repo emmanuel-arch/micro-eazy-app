@@ -57,7 +57,16 @@ interface Props<T> {
    * component guessing at a shape it does not know.
    */
   emptyWhen?: (data: T) => string | null;
-  children: (data: T) => ReactNode;
+  /**
+   * `reload` re-runs `load` — the same path the error state's "Try again" uses.
+   *
+   * It is handed to the screen because some screens CAUSE the data to change:
+   * Home raises an M-PESA prompt, and the balance behind it moves once the
+   * lender confirms. Without this, the only way to see the new figure is to
+   * navigate away and back, which customers read as the payment not having
+   * worked. Screens that never mutate anything simply ignore it.
+   */
+  children: (data: T, reload: () => void) => ReactNode;
 }
 
 export function Resource<T>({ title, load, emptyWhen, children }: Props<T>) {
@@ -148,7 +157,7 @@ export function Resource<T>({ title, load, emptyWhen, children }: Props<T>) {
     );
   }
 
-  return <>{children(state.data)}</>;
+  return <>{children(state.data, retry)}</>;
 }
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {

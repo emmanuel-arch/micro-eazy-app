@@ -188,7 +188,7 @@ function Shell() {
                         : null
                     }
                   >
-                    {(d) => <Home data={d} />}
+                    {(d, reload) => <Home data={d} onRefresh={reload} />}
                   </Resource>
                 </RequireSession>
               }
