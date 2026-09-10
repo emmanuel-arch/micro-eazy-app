@@ -76,20 +76,34 @@ export function Resource<T>({ title, load, emptyWhen, children }: Props<T>) {
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
+  // ── IT ASKS EVEN WITHOUT THE SECOND FACTOR, AND THAT IS THE FIX ───────────
+  // This used to return early when there was no national ID, leaving the state
+  // on "loading". The comment said the guard would send them to the gate. The
+  // guard does no such thing — it checks `status` only — so nothing moved, no
+  // request was made, and the screen sat on "Checking with your lender…" for
+  // ever with an empty console. Every screen, for any customer who signed in
+  // through the SMS-password door or simply closed the tab.
+  //
+  // An early return that leaves a spinner up is the worst available answer,
+  // because it is indistinguishable from a slow network and it never resolves.
+  // The call now goes out regardless, and the SERVER decides:
+  //
+  //   · Routes that can identify the borrower from the cookie answer normally.
+  //     /api/portal/ladder already does exactly this — it falls back to the
+  //     session's own borrower id when no national ID is supplied.
+  //   · Routes that genuinely need the ID answer with a message, and this
+  //     component renders it as an error with a Try again — something the
+  //     customer can read and act on.
+  //
+  // Either is better than a spinner that means nothing. And with the ID now
+  // restored from /api/portal/session on boot, this path is the exception
+  // rather than the rule.
   useEffect(() => {
-    if (!nationalId) {
-      // Reaching a gated screen without the second factor means the sign-in
-      // flow was skipped or the tab was restored without it. The guard sends
-      // them to the gate; this is only here so the screen never renders a
-      // half-state while that happens.
-      setState({ status: "loading" });
-      return;
-    }
     let alive = true;
     setState({ status: "loading" });
     (async () => {
       try {
-        const data = await loadRef.current(nationalId);
+        const data = await loadRef.current(nationalId ?? "");
         if (!alive) return;
         const empty = emptyRef.current?.(data) ?? null;
         setState(empty ? { status: "empty", message: empty } : { status: "ready", data });

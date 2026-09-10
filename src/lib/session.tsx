@@ -33,6 +33,31 @@
 // It is worth being clear about what this is NOT protecting against: an ID here
 // grants nothing on its own, because every route also demands the cookie. The
 // storage choice is about the shared-handset case, not about secrecy.
+//
+// ── AND THE STORE IS A CACHE, NOT THE ONLY COPY ─────────────────────────────
+// The reasoning above is intact and the store is still sessionStorage. What was
+// wrong was treating it as the ONLY copy. `nationalId` was set in exactly one
+// place — identify(), on the OTP door — so there were two ordinary ways to be
+// verified without one:
+//
+//   · CLOSE THE TAB. sessionStorage dies with it. The cookie does not, so the
+//     app came back verified, rendered the whole shell, and could not fetch a
+//     thing.
+//   · SIGN IN WITH THE SMS PASSWORD. /signin never asks for an ID at all — that
+//     is the point of that door — so it never had one to lose. Every customer
+//     coming through the door most of Micromart's existing book uses landed
+//     here immediately.
+//
+// Both produced the same silent failure, because the guard admits on `status`
+// alone while every screen refuses to fetch without an ID: "Checking with your
+// lender…" for ever, no request, no error, nothing in the console.
+//
+// So the server now returns it on /api/portal/session — it can, because the
+// cookie already identifies the borrower — and the resume effect below restores
+// it. sessionStorage stays exactly what it was designed to be: a convenience
+// that survives a reload, holding a copy of something the server can always say
+// again. Which is the rule the top of this file already states about everything
+// else in here.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   createContext,
@@ -168,6 +193,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (s.authenticated) {
           setStatus("verified");
           setPhoneMasked(s.phoneMasked ?? null);
+          // ── THE SECOND FACTOR IS RESTORED HERE, NOT ONLY REMEMBERED ───────
+          // `nationalId` used to be set in exactly one place — identify(), on
+          // the OTP door — and kept in `sessionStorage`, which dies with the
+          // tab. So there were two ways to arrive verified without one: close
+          // the tab and come back, or sign in through the SMS-password door,
+          // which never asks for an ID at all. Either way the app admitted the
+          // customer (the guard only checks `status`) and then could not fetch
+          // anything, because every screen refuses to call without an ID. The
+          // result was "Checking with your lender…" for ever, on every screen,
+          // with no request and no error to explain it.
+          //
+          // The server knows this from the cookie, so it says so. Only when it
+          // does — a response without one must never wipe an ID this browser
+          // already holds, which is what the customer typed a moment ago on the
+          // OTP door and is the one copy that exists mid-onboarding.
+          if (s.nationalId) setNationalId(s.nationalId);
         } else {
           clear();
         }
@@ -178,7 +219,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [clear]);
+  }, [clear, setNationalId]);
 
   // ── The hour running out ──────────────────────────────────────────────────
   // Any gated call can come back 401 `needsOtp` at any time. Rather than have

@@ -74,6 +74,20 @@ export interface Session {
   lenderSlug?: string;
   /** "0712 ••• 678" — for showing, never for sending. */
   phoneMasked?: string;
+  /**
+   * The national ID on the borrower record this cookie belongs to.
+   *
+   * The SERVER is the source of truth for this, and that is a correction rather
+   * than an addition. The app used to hold the only copy in `sessionStorage`,
+   * which dies with the tab — so a customer who closed the tab, or who signed in
+   * through the SMS-password door (which never asks for an ID), came back
+   * authenticated and unable to load a single screen. See the note on this
+   * endpoint in connected-suite.
+   *
+   * Absent when the lookup found nothing or could not run. The app carries on
+   * without it: the routes that can answer from the cookie alone still do.
+   */
+  nationalId?: string;
   /** Only present when the request asked `?phone=`. Answers "is this the
    *  number you already verified?" and nothing else. */
   matchesPhone?: boolean;
