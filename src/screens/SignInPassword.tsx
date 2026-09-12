@@ -208,10 +208,11 @@ export default function SignInPassword() {
     // be the least considered screen in the flow.
     <AuthLayout>
       <div>
-        <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink">Welcome back.</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
-          Enter the number your Micromart account is on. We send a code to it — or use the password they SMS'd you, if
-          you still have it.
+        <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink lg:text-[30px]">
+          Welcome back.
+        </h1>
+        <p className="mt-2 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
+          Enter the number your Micromart account is on. We take you through the rest.
         </p>
 
         <form onSubmit={submit} className="mt-6">
@@ -258,69 +259,92 @@ export default function SignInPassword() {
               The code path lands on the SAME gate the front door uses, so there
               is one screen in this app where a six-digit code is entered and
               one place that decides what happens after it. */}
-          <div className="mt-5">
+          {/* ── THE SAME THREE-TILE FAMILY AS THE FRONT DOOR ────────────────
+              One shape, three colours, one phrase each — see the long note in
+              screens/Welcome.tsx about why the bold-label-plus-grey-sub-line
+              arrangement was replaced. The colours carry the same meanings
+              across both doors, which is the point of having them: green is the
+              way forward, gold is the key you already hold, blue is new here.
+
+              A customer who walks front door → Micromart door sees the SAME
+              green tile in the same place doing the same job, so the second
+              screen costs them no relearning at all. */}
+          <div className="mt-5 space-y-2.5">
             <button
               type="button"
               onClick={onSendCode}
               disabled={sending || busy}
-              className="glass-option glass-option--primary px-4 py-3.5"
+              aria-label="Send me a code — arrives by SMS from Micromart"
+              className="glass-tile tone-green px-4 py-3.5"
             >
-              <span
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                style={{ background: "color-mix(in oklab, var(--green) 22%, transparent)", color: "var(--green-ink)" }}
-              >
+              <span className="glass-tile__chip">
                 {sending ? (
                   <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.4} />
                 ) : (
                   <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.3} />
                 )}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-bold leading-tight text-ink">
-                  {sending ? "Sending your code" : "Send me a code"}
-                </span>
-                <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
-                  {sending ? "One moment." : "Arrives by SMS from Micromart."}
-                </span>
+              <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">
+                {sending ? "Sending your code" : "Send me a code"}
               </span>
-              {!sending && <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />}
+              {!sending && <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />}
             </button>
-          </div>
 
-          {/* ── OR, THE PASSWORD ────────────────────────────────────────────
-              Collapsed by default. Present and one tap away for the customer
-              who has it — hiding it entirely would throw away the faster path
-              for the book that already holds the credential. */}
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">or</span>
-            <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-          </div>
+            {/* ── THE PASSWORD ──────────────────────────────────────────────
+                Collapsed by default, and one tap away. Hiding it entirely would
+                throw away the faster path for the book that already holds the
+                credential; opening with it would put a password field in front
+                of the majority who deleted that SMS months ago.
 
-          {!usePassword && (
-            <button
-              type="button"
-              onClick={() => setUsePassword(true)}
-              className="glass-option px-4 py-3.5"
-            >
-              <span
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
+                The "OR" rule that used to sit above this is gone. Three tiles in
+                a column already read as alternatives — a divider between them
+                was a line drawn to explain something the layout had said. */}
+            {!usePassword && (
+              <button
+                type="button"
+                onClick={() => setUsePassword(true)}
+                aria-label="Use password — the one Micromart sent you by SMS"
+                className="glass-tile tone-gold px-4 py-3.5"
               >
-                <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-bold leading-tight text-ink">Use my Micromart password</span>
-                <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
-                  The one they sent you by SMS.
+                <span className="glass-tile__chip">
+                  <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.3} />
                 </span>
-              </span>
-              <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
-            </button>
-          )}
+                <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Use password</span>
+                <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
+              </button>
+            )}
+
+            {/* ── THE OTHER DOOR ────────────────────────────────────────────
+                Somebody who lands here and is NOT a customer has to be able to
+                leave for the right screen without going back and guessing — and
+                the front door's own copy sends people here, so the return path
+                has to be as visible as the way in.
+
+                It used to be a separate block below a hairline, under the label
+                "New to Micro Eazy?". That is a heading explaining a button, on a
+                screen whose whole problem was too much explaining. As the third
+                tile it is the same offer, in the same family, for free. */}
+            {!usePassword && (
+              <button
+                type="button"
+                onClick={() => navigate("/welcome")}
+                aria-label="Create account — new to Micro Eazy, photograph your ID and we do the rest"
+                className="glass-tile tone-blue px-4 py-3.5"
+              >
+                <span className="glass-tile__chip">
+                  <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.3} />
+                </span>
+                <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Create account</span>
+                <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
+              </button>
+            )}
+          </div>
 
           {/* ── Password ──────────────────────────────────────────────────── */}
-          <div hidden={!usePassword}>
+          {/* `hidden` rather than unmounted, so a password manager that filled
+              the field before the customer opened this panel does not lose what
+              it put there. */}
+          <div hidden={!usePassword} className="mt-5">
           <label
             htmlFor="signin-password"
             className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint"
@@ -399,34 +423,10 @@ export default function SignInPassword() {
           )}
         </form>
 
-        {/* ── The other door ─────────────────────────────────────────────────
-            Not a footnote. Somebody who lands here and is NOT a customer has to
-            be able to leave for the right screen without going back and
-            guessing — and the front door's own copy sends people here, so the
-            return path has to be as visible as the way in. */}
-        <div className="mt-7 border-t pt-5" style={{ borderColor: "var(--line)" }}>
-          <p className="text-[12.5px] text-ink-faint">New to Micro Eazy?</p>
-          <button
-            type="button"
-            onClick={() => navigate("/welcome")}
-            className="mt-2.5 flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-surface-sunk active:scale-[0.99]"
-            style={{ borderColor: "var(--line-strong)" }}
-          >
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-              style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
-            >
-              <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.2} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-semibold leading-tight">Create an account</span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
-                Photograph your ID and we will do the rest.
-              </span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
-          </button>
-        </div>
+        {/* The way back to the front door used to be a separate bordered block
+            down here, under the heading "New to Micro Eazy?". It is now the
+            third tile in the stack above — same offer, same family, and one
+            fewer section on a screen whose problem was that it had too many. */}
       </div>
     </AuthLayout>
   );

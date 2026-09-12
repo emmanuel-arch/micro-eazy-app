@@ -164,13 +164,14 @@ export default function You() {
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {/* "None" first, and it is the default. See the note in
-                lib/media/wallpapers.ts for why the app does not open on a
-                photograph a customer did not choose. */}
+            {/* "None" first, and it is no longer the default — Nairobi dawn is.
+                It stays at the head of the grid because it is the row somebody
+                comes here looking for: the one way to turn the floor off. See
+                DEFAULT_WALLPAPER in lib/media/wallpapers.ts. */}
             <WallpaperTile
               id={NO_WALLPAPER}
               name="None"
-              blurb="Plain. The fastest one."
+              blurb="No picture at all."
               selected={id === NO_WALLPAPER}
               scrim={scrim}
               onPick={() => setWallpaper(NO_WALLPAPER)}

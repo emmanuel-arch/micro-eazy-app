@@ -127,21 +127,33 @@ export const WALLPAPERS: Wallpaper[] = [
   },
 ];
 
-/**
- * ── THE DEFAULT, AND WHY IT IS NOT A PHOTOGRAPH ──────────────────────────────
- * "None" is first in the picker and it is what a new customer gets.
- *
- * That is a deliberate reversal of the usual instinct, which is to show off the
- * feature on first run. The first screens a person sees in this app are a
- * verification flow and a request for a photograph of their national ID, and
- * every pixel of confidence on those screens is doing real work. A wallpaper
- * they did not choose is a distraction on exactly the screen that can least
- * afford one — and it is 300 KB spent before they have decided to trust us.
- *
- * So the app opens plain, and the wallpaper is something a person finds and
- * turns on. Which is also when it means something to them.
- */
+/** The picker's "no picture at all" row. Still a real, storable choice — it is
+ *  simply no longer what silence means. See DEFAULT_WALLPAPER below. */
 export const NO_WALLPAPER = "none";
+
+/**
+ * ── THE DEFAULT, AND WHY IT IS A PHOTOGRAPH AFTER ALL ────────────────────────
+ * This used to be NO_WALLPAPER, on the argument that the first screens a person
+ * sees are a verification flow and a request for a photograph of their national
+ * ID, and a picture nobody chose is a distraction on exactly the screen that can
+ * least afford one.
+ *
+ * Overruled, deliberately, and the reason is the DESKTOP. On a handset the app
+ * fills the glass and there is no floor to see; on a laptop the shell is a
+ * capped, centred canvas with ground showing on all four sides, and that ground
+ * is most of the screen. Left plain it is a grey rectangle that could belong to
+ * any SaaS product in the world. With Nairobi at dawn behind it, it is visibly a
+ * Kenyan app before a single word is read — and the scrim (below) guarantees
+ * every surface above it is still legible, so the picture costs nothing it
+ * cannot pay for.
+ *
+ * It is one 2560px WebP under the pipeline's 300 KB ceiling, preloaded from
+ * index.html's pre-paint script, and a customer who does not want it has both
+ * "None" and eleven alternatives one tap away in Settings.
+ *
+ * Keep this id in step with the fallback in index.html's pre-paint script.
+ */
+export const DEFAULT_WALLPAPER = "nairobi-dawn";
 
 export const wallpaperFor = (id: string | null | undefined): Wallpaper | null =>
   (id && id !== NO_WALLPAPER ? WALLPAPERS.find((w) => w.id === id) ?? null : null);

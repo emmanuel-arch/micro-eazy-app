@@ -539,102 +539,6 @@ button:hover > .brand-plate {
   box-shadow: none;
 }
 
-/* ═════════════════════════════════════════════════════════════════════════════
-   GLASS OPTIONS — the front door's choices, as one family.
-   ═════════════════════════════════════════════════════════════════════════════
-   The front door offered three ways in and dressed them as three different
-   species: a saturated green pill, a hairline outlined button, and a bordered
-   row with an icon. The visual hierarchy said "one real option and two
-   afterthoughts", when in fact "Already with Micromart?" is the door MOST
-   people need on day one — Micromart's existing book is tens of thousands of
-   people who already hold a password.
-
-   So they become one family: three cards of the same material, the same radius
-   and the same weight, distinguished by ACCENT rather than by kind. Primacy is
-   still expressed — the first card carries the brand fill — but as emphasis
-   within a set, not as a different class of thing.
-
-   The material is real glass rather than a flat panel because the surface
-   behind it is photography, and a card that lets a little of the picture
-   through reads as sitting ON the page rather than punched INTO it.
-   ───────────────────────────────────────────────────────────────────────────── */
-
-.glass-option {
-  position: relative;
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 1.125rem;
-  border: 1px solid var(--line-strong);
-  background: color-mix(in oklab, var(--surface) 78%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
-  box-shadow:
-    0 1px 2px rgb(10 16 32 / 0.04),
-    0 14px 30px -20px rgb(10 16 32 / 0.35),
-    inset 0 1px 0 rgb(255 255 255 / 0.55);
-  text-align: left;
-  transition:
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 200ms ease,
-    border-color 200ms ease;
-}
-
-[data-theme="dark"] .glass-option {
-  background: color-mix(in oklab, var(--surface) 90%, transparent);
-  box-shadow:
-    0 14px 34px -22px rgb(0 0 0 / 0.9),
-    inset 0 1px 0 rgb(255 255 255 / 0.07);
-}
-
-.glass-option:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklab, var(--green-ink) 45%, var(--line-strong));
-  box-shadow:
-    0 1px 2px rgb(10 16 32 / 0.04),
-    0 22px 44px -22px rgb(10 16 32 / 0.45),
-    inset 0 1px 0 rgb(255 255 255 / 0.6);
-}
-
-.glass-option:active:not(:disabled) {
-  transform: translateY(0) scale(0.994);
-}
-
-.glass-option:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* THE PRIMARY. Same material, brand light behind it — the accent that says
-   "this one" without changing what kind of thing it is. */
-.glass-option--primary {
-  border-color: color-mix(in oklab, var(--green) 55%, transparent);
-  background:
-    linear-gradient(180deg,
-      color-mix(in oklab, var(--lime) 26%, var(--surface)) 0%,
-      color-mix(in oklab, var(--green) 20%, var(--surface)) 100%);
-  box-shadow:
-    0 1px 2px rgb(10 16 32 / 0.05),
-    0 18px 36px -20px rgb(37 149 12 / 0.55),
-    inset 0 1px 0 rgb(255 255 255 / 0.6);
-}
-
-[data-theme="dark"] .glass-option--primary {
-  background:
-    linear-gradient(180deg,
-      color-mix(in oklab, var(--lime) 20%, var(--surface)) 0%,
-      color-mix(in oklab, var(--green) 14%, var(--surface)) 100%);
-}
-
-.glass-option--primary:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--green) 75%, transparent);
-  box-shadow:
-    0 1px 2px rgb(10 16 32 / 0.05),
-    0 26px 50px -22px rgb(37 149 12 / 0.7),
-    inset 0 1px 0 rgb(255 255 255 / 0.65);
-}
-
 /* ── THE ASSURANCE PANEL ─────────────────────────────────────────────────────
    The line about checking the number against a national ID was set as 12px
    grey text directly on the page. Over photography, at that size and weight, it
@@ -653,4 +557,435 @@ button:hover > .brand-plate {
 
 [data-theme="dark"] .assurance {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   GLASS TILES — the front door's choices, as one family of three.
+   ═════════════════════════════════════════════════════════════════════════════
+   The front door offers three ways in. They used to be three different species —
+   a saturated green pill, a hairline outlined button, and a bordered row — and
+   then, correcting that, three IDENTICAL grey cards distinguished only by a
+   small tinted icon and two lines of explanatory text each.
+
+   Both were wrong in the same direction: the eye had to READ the door before it
+   could choose one. On the screen a customer meets first, on a prepaid bundle at
+   the side of a road, that is the most expensive sentence in the funnel.
+
+   So: one shape, three COLOURS, one word each. The tile carries its own tone in
+   `--tone` (the fill and the glow) and `--tone-ink` (the type on it), which is
+   what lets a single class serve all three without any component hard-coding a
+   hex value — and lets the dark theme lift both without the screens knowing.
+
+   ── WHY THEY ARE STILL GLASS ────────────────────────────────────────────────
+   Above `lg` the surface behind these is photography. A card that lets a little
+   of the picture through reads as sitting ON the page; an opaque one reads as
+   punched INTO it. The tint is carried in the fill rather than in a border so it
+   survives whatever frame of the deck happens to be underneath.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.glass-tile {
+  /* The default tone is the brand. Every tile sets its own — see .tone-* below. */
+  --tone: var(--green);
+  --tone-ink: var(--green-ink);
+
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+  border-radius: 1.125rem;
+  border: 1px solid color-mix(in oklab, var(--tone) 34%, var(--line-strong));
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--tone) 17%, var(--surface)) 0%,
+      color-mix(in oklab, var(--tone) 7%, var(--surface)) 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow:
+    0 1px 2px rgb(10 16 32 / 0.04),
+    0 12px 26px -18px color-mix(in oklab, var(--tone) 60%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.55);
+  color: var(--tone-ink);
+  text-align: left;
+  /* The overshoot is the "bubbly". A plain ease lands flat; this one arrives a
+     hair past its mark and settles, which is what reads as a physical object
+     being picked up rather than a rectangle changing size. */
+  transition:
+    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 260ms ease,
+    border-color 260ms ease;
+}
+
+[data-theme="dark"] .glass-tile {
+  /* --surface is 4.5% white in the dark theme, so mixing a tone INTO it lands
+     at an alpha nobody can see. The dark tile mixes against its own translucent
+     ground at a higher ratio instead — same glass, a tone that is actually
+     present. */
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--tone) 30%, rgb(255 255 255 / 0.07)) 0%,
+      color-mix(in oklab, var(--tone) 13%, rgb(255 255 255 / 0.04)) 100%);
+  box-shadow:
+    0 14px 34px -22px rgb(0 0 0 / 0.9),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+/* THE SHEEN. One pass of light across the face on hover — the cheapest thing on
+   this screen and the one that reads as "polished". It is a pseudo-element and
+   not a second div so a button stays one element in the accessibility tree. */
+.glass-tile::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -65%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0.5) 50%, transparent 100%);
+  transform: skewX(-18deg);
+  pointer-events: none;
+  transition: left 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-theme="dark"] .glass-tile::after {
+  background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0.16) 50%, transparent 100%);
+}
+
+.glass-tile:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--tone) 70%, transparent);
+  box-shadow:
+    0 1px 2px rgb(10 16 32 / 0.05),
+    0 26px 48px -22px color-mix(in oklab, var(--tone) 75%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+.glass-tile:hover:not(:disabled)::after {
+  left: 120%;
+}
+
+.glass-tile:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--tone) 80%, transparent);
+  outline-offset: 2px;
+}
+
+.glass-tile:active:not(:disabled) {
+  transform: translateY(-1px) scale(0.99);
+  transition-duration: 90ms;
+}
+
+.glass-tile:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The icon chip. Its own tone, and it grows a little with the tile — two things
+   moving together is what makes the hover read as one object rather than as a
+   card with a sticker on it. */
+.glass-tile__chip {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  height: 2.5rem;
+  width: 2.5rem;
+  border-radius: 0.875rem;
+  background: color-mix(in oklab, var(--tone) 24%, transparent);
+  color: var(--tone-ink);
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 260ms ease;
+}
+
+.glass-tile:hover:not(:disabled) .glass-tile__chip {
+  transform: scale(1.08);
+  background: color-mix(in oklab, var(--tone) 34%, transparent);
+}
+
+/* ── THE THREE TONES ─────────────────────────────────────────────────────────
+   Named rather than passed inline, so the dark theme's lift lives here with the
+   light value it corrects rather than in a component's style attribute where no
+   media query can reach it.
+
+   Every --tone-ink below is checked as TYPE against the tile it sits on, which
+   is a near-white in the light theme: green 5.5:1, blue 6.3:1, gold 5.4:1. See
+   the note on the two greens at the top of this file for why that check is not
+   optional on a screen used outdoors. */
+.tone-green { --tone: var(--green);  --tone-ink: var(--green-ink); }
+.tone-blue  { --tone: #3f6fd8;       --tone-ink: #2a55b0; }
+.tone-gold  { --tone: #d98a0b;       --tone-ink: #96570a; }
+
+[data-theme="dark"] .tone-blue { --tone: #5b8cff; --tone-ink: #a8c4ff; }
+[data-theme="dark"] .tone-gold { --tone: #f0a92b; --tone-ink: #f7ca74; }
+
+/* Somebody who asked their phone to stop moving things asked this screen too.
+   The sheen is a moving highlight; without this it still sweeps. */
+@media (prefers-reduced-motion: reduce) {
+  .glass-tile,
+  .glass-tile::after,
+  .glass-tile__chip {
+    transition: none;
+  }
+  .glass-tile:hover:not(:disabled) {
+    transform: none;
+  }
+  .glass-tile:hover:not(:disabled)::after {
+    left: -65%;
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE LANDSCAPE COUNTER — how a desktop screen behaves in this app.
+   ═════════════════════════════════════════════════════════════════════════════
+   ── THE RULE ────────────────────────────────────────────────────────────────
+   On a laptop, a Micro Eazy screen NEVER scrolls down. The window is the frame,
+   the frame is fixed, and the footer — the line that says a licensed lender
+   funds the money and every decision can be explained — is on screen at all
+   times, on every screen, without anybody reaching for a mouse wheel.
+
+   Content that does not fit does not go DOWN. It goes SIDEWAYS, as a second
+   pane of the same counter, in the same rectangle, at the same size. Nothing is
+   widened to achieve it: a pane is exactly as wide as the canvas it replaces.
+
+   ── WHY, AND WHY IT IS NOT MERELY TASTE ─────────────────────────────────────
+   Two reasons, and the second is the real one:
+
+     1. The floor is a photograph. On a handset the app fills the glass and the
+        wallpaper is never seen; on a laptop the canvas is capped and centred and
+        the ground is most of the screen. A page that scrolls slides its content
+        over that floor and the composition falls apart every time somebody
+        touches the wheel. A fixed frame keeps the picture and the panels in a
+        settled relationship — the app looks the same in a screenshot as it does
+        in the hand.
+
+     2. A scrollbar hides the disclosure. The footer is the one sentence on the
+        screen a regulator would ask about, and on a scrolling page it lives at
+        the bottom of a column most people never reach. Putting the frame on a
+        fixed height is what makes that line structurally unmissable rather than
+        present-if-you-look.
+
+   ── THE HANDSET IS UNTOUCHED ────────────────────────────────────────────────
+   All of this is `lg` and up. A phone scrolls down, as a phone should: it has
+   no horizontal room to spend, the thumb travels vertically, and the deck below
+   degrades to plain vertical order with no pager at all. The phone is still the
+   design target; this is the adaptation.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Above lg the deck IS the frame: it fills the shell's content box exactly, and
+   the panes inside it are clipped to that box rather than extending it. */
+@media (min-width: 1024px) {
+  .deck {
+    height: 100%;
+  }
+}
+
+.deck-viewport {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+@media (min-width: 1024px) {
+  .deck-viewport {
+    overflow: hidden;
+  }
+}
+
+/* The track is one viewport wide and holds every pane in a row. The percentage
+   in translateX resolves against the TRACK's own width, which is the viewport's
+   width — so a --pane of 2 is exactly two panes along, at any window size, with
+   no measurement in JavaScript and nothing to recompute on resize. */
+@media (min-width: 1024px) {
+  .deck-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    transform: translate3d(calc(var(--pane, 0) * -100%), 0, 0);
+    transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
+  .deck-pane {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    /* The safety valve, and it is deliberately quiet. Panes are composed to fit
+       a 768px-tall laptop; on something shorter — or at a 200% browser zoom,
+       which is a real accessibility setting and not an edge case — a pane that
+       CLIPPED would hide content with no way to reach it. So it scrolls, with
+       no bar, and .scroll-veil below puts a fade at the foot so the affordance
+       is not invisible. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .deck-pane::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Only the pane in view may be reached by Tab. Without this, tabbing off the
+     last control walks into the panes waiting off-screen and the viewport
+     scrolls sideways by itself — a focus ring somewhere nobody can see. */
+  .deck-pane[aria-hidden="true"] {
+    visibility: hidden;
+  }
+}
+
+/* On a handset there is no track and no panes: the sections stack and the page
+   scrolls, which is the right behaviour for a thumb and the layout every screen
+   in this app was designed on first. */
+@media (max-width: 1023.98px) {
+  .deck-track {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-track {
+    transition: none;
+  }
+}
+
+/* ── THE FADE AT THE FOOT OF A SCROLL ────────────────────────────────────────
+   Hiding a scrollbar removes the one signal that there is more. This puts it
+   back as a soft edge instead: content passing under a fade reads as continuing,
+   and a pane whose content ends short of the fold simply never reaches it.
+
+   It is pointer-events:none and aria-hidden at the call site — it must never eat
+   a click aimed at the card beneath it. */
+.scroll-veil {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2.5rem;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--bg) 0%, transparent 100%);
+  opacity: 0.9;
+}
+
+/* ── THE PAGER ───────────────────────────────────────────────────────────────
+   "There is more, and it is that way." It sits in the footer bar rather than
+   floating over the content, because it is chrome about the WHOLE screen and
+   chrome belongs at the edge of the frame. */
+.deck-step {
+  height: 0.375rem;
+  width: 0.375rem;
+  border-radius: 9999px;
+  background: var(--line-strong);
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), background-color 320ms ease;
+}
+
+.deck-step[aria-current="true"] {
+  width: 1.5rem;
+  background: var(--green-ink);
+}
+
+.deck-step:hover:not([aria-current="true"]) {
+  background: var(--ink-faint);
+}
+
+/* ── THE LEGAL BAR ───────────────────────────────────────────────────────────
+   The disclosure, and the pager beside it, on ONE solid strip at the foot of the
+   frame. It was a paragraph of 11px grey type sitting directly on the page at
+   the bottom of Home — which on a photographed floor is the least legible thing
+   on the screen, and on every OTHER screen was not present at all.
+
+   Solid, not glass: this is the sentence that must never be at the mercy of what
+   is behind it, which is the same rule .assurance follows on the front door. The
+   navy is a few per cent — enough that it reads as a band rather than as one
+   more card, not enough to become a surface competing for attention. */
+.legal-bar {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--navy) 5%, var(--surface)) 0%, var(--surface) 100%);
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-card);
+}
+
+[data-theme="dark"] .legal-bar {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--navy) 42%, var(--bg-tint)) 0%, var(--bg-tint) 100%);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE LETTERHEAD — the mark at the head of its own navigation.
+   ═════════════════════════════════════════════════════════════════════════════
+   Ported from the lender console (connected-suite/src/components/shell/
+   Sidebar.tsx), and the port is the point: a borrower opening this app and an
+   officer opening the console should be looking at the same object in the same
+   corner.
+
+   The console's rule is that the logo gets the FULL WIDTH of the rail and
+   centres itself inside a white card that runs to the column's own gutters —
+   the card is the letterhead, and object-contain absorbs whatever aspect ratio
+   the artwork happens to have. A small plate floating in the middle of a 236px
+   rail is the thing that reads as a sticker rather than as a masthead, which is
+   what this replaces.
+
+   It stays WHITE in both themes, like .brand-plate, because the mark is navy and
+   green on transparency and its navy half disappears into a dark ground.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.letterhead {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  box-shadow:
+    0 1px 2px rgb(10 16 32 / 0.05),
+    0 14px 30px -22px rgb(1 40 99 / 0.4);
+  transition: box-shadow 220ms ease;
+}
+
+[data-theme="dark"] .letterhead {
+  border-color: rgb(255 255 255 / 0.08);
+  box-shadow:
+    0 10px 30px -16px rgb(0 0 0 / 0.7),
+    inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
+/* Chrome answers the pointer, quietly. It is a masthead, not a call to action —
+   a letterhead that leaps off the page is a letterhead that distracts. */
+a:hover > .letterhead {
+  box-shadow:
+    0 1px 2px rgb(10 16 32 / 0.05),
+    0 20px 38px -22px rgb(1 40 99 / 0.55);
+}
+
+/* ── THE MARK'S BOX ──────────────────────────────────────────────────────────
+   Driven from two custom properties that components/shell/BrandMark.tsx sets
+   inline, rather than from an inline width/height.
+
+   The difference matters: an inline `width` cannot be overridden by any rule,
+   so a caller that wanted the mark bigger on a laptop than on a handset had no
+   way to ask for it. Custom properties may be set inline and READ here, which
+   puts the breakpoint in the stylesheet where it belongs and leaves the
+   component knowing only about two numbers. */
+.brand-mark {
+  width: var(--mark, 52px);
+  height: var(--mark, 52px);
+}
+
+@media (min-width: 1024px) {
+  .brand-mark {
+    width: var(--mark-lg, var(--mark, 52px));
+    height: var(--mark-lg, var(--mark, 52px));
+  }
+}
+
+/* The sheen is an absolutely-positioned pseudo-element, so it paints above the
+   tile's static children — a highlight passing OVER the label rather than under
+   it. Lifting the children into their own layer is what keeps the word legible
+   for the 600ms the light is crossing it. */
+.glass-tile > * {
+  position: relative;
+  z-index: 1;
 }

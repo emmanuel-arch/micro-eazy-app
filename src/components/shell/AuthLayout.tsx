@@ -62,16 +62,22 @@ export function AuthLayout({
             a full-bleed photograph is two surfaces competing to be the subject,
             and the photograph should win. See .sky-phone-only in theme.css. */}
         <header className="sky aurora sky-phone-only relative shrink-0 overflow-hidden rounded-b-[28px] px-5 pb-8 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-none lg:px-10 lg:pb-0 lg:pt-9">
-          {/* ── ALIGNED TO THE COLUMN, NOT TO THE WINDOW ────────────────────
-              The content below is centred inside a 420px column (see the
-              wrapper further down), so a mark pinned to the header's own `px-10`
-              sat ~120px to the left of the "Welcome." it belongs to. Two
-              left edges in a layout that has room for one reads as an accident.
-              The same max-width and centring here puts the mark directly above
-              the first line of type, which is what makes it look placed rather
-              than parked. Below `lg` this is a no-op: the navy band is
-              full-bleed and the mark belongs in its corner. */}
-          <div className="relative z-10 flex items-start justify-between gap-3 py-2 lg:mx-auto lg:max-w-[420px]">
+          {/* ── THE CORNERS OF THE CARD, NOT THE EDGES OF THE COLUMN ────────
+              This row used to be centred on the 420px content column, so that
+              the mark sat directly above the "Welcome." it belongs to.
+
+              Reversed, deliberately, because the two things in it are not one
+              object and should not share an edge. The mark answers "whose site
+              is this", and every person on earth looks for that answer in the
+              top-left CORNER of the window. The appearance switch is a utility,
+              and it belongs at the far end of the same line — hard against the
+              edge where the photography begins, so the left half reads as one
+              card with its own two corners rather than as a column adrift with
+              a gutter either side of it.
+
+              Below `lg` nothing changes: the navy band is full-bleed and both
+              controls are already in its corners. */}
+          <div className="relative z-10 flex items-start justify-between gap-3 py-2">
             {/* ── THE MARK, ON ITS OWN ─────────────────────────────────────
                 connected-suite/public/images/logo.png, the same file the LMS
                 console uses, so the borrower app and the staff console show one
@@ -85,11 +91,19 @@ export function AuthLayout({
                 accessible name moved onto the link/aria-label rather than being
                 set in grey type nobody read.
 
-                The plate (see .brand-plate) is what lets it hold the corner at
-                this size without floating: on the navy band it is the white
-                ground the navy half of the artwork needs, and on paper it is a
-                real surface with its own light. */}
-            <BrandMark size={64} framed />
+                ── AND THE PLATE IS GONE ON PAPER ─────────────────────────
+                It wore the white plate here too. On a laptop that plate is a
+                white rectangle on a pale page — which is the boxed-in, app-icon
+                look the plate exists to AVOID everywhere else: a frame around a
+                logo that has no dark ground to be lifted off in the first place.
+
+                So on this screen the mark is bare, and larger to pay for the
+                frame it gave up. On a HANDSET nothing changes: the header there
+                is still the navy band, and .brand-chip keys on the surface the
+                mark is SITTING ON rather than on a prop (see styles/theme.css),
+                so the navy half still gets the white chip it needs on navy. One
+                rule, two grounds, no caller having to remember which. */}
+            <BrandMark size={54} sizeLg={76} />
             <ThemeToggle variant="band" />
           </div>
           {/* The name, for anything that does not render pictures. The visible

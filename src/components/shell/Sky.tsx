@@ -31,8 +31,15 @@ export function Sky({
     // ground showing on all four sides. A header rounded only at the BOTTOM is
     // a band that has been cut off at the top; rounded all round it is an
     // object on the page, which is what it now is.
-    <header className="sky aurora relative overflow-hidden rounded-[24px] px-5 pb-16 pt-6">
-      <div className="relative z-10 flex items-center gap-3 py-3">
+    // ── IT IS TIGHTER ON A LAPTOP, AND THAT IS THE LANDSCAPE RULE TALKING ──
+    // Above `lg` the shell is a fixed frame and every screen shares one height
+    // budget with the footer (see components/shell/AppShell.tsx). This band is
+    // the same on every one of them, so a few rem of padding here is a few rem
+    // taken off EVERY screen's content — which on Home was the difference
+    // between the shortcuts fitting and being clipped. A phone has all the
+    // height it wants and keeps the generous version.
+    <header className="sky aurora relative overflow-hidden rounded-[24px] px-5 pb-16 pt-6 lg:pb-14 lg:pt-4">
+      <div className="relative z-10 flex items-center gap-3 py-3 lg:py-2">
         {onBack && (
           <button
             onClick={onBack}

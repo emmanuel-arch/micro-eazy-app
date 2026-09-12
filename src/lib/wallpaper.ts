@@ -21,7 +21,7 @@
 // and this module share KEY and must move together.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useSyncExternalStore } from "react";
-import { NO_WALLPAPER, wallpaperFor, type Wallpaper } from "./media/wallpapers";
+import { DEFAULT_WALLPAPER, wallpaperFor, type Wallpaper } from "./media/wallpapers";
 
 /** Duplicated as a literal in index.html's pre-paint script. Change both. */
 export const KEY = "me.wallpaper";
@@ -41,9 +41,24 @@ function subscribe(onChange: () => void) {
 
 /** Where the choice lives when a browser is set to block site data — access
  *  itself throws there, not only writes, and without this the picker would move
- *  and then snap back. Lasts the session, which is all that setting allows. */
-let memory = NO_WALLPAPER;
+ *  and then snap back. Lasts the session, which is all that setting allows.
+ *
+ *  It starts at the DEFAULT rather than at "none", so a customer whose browser
+ *  refuses storage gets the dressed app like everybody else rather than the one
+ *  bare floor nobody chose. */
+let memory = DEFAULT_WALLPAPER;
 
+/**
+ * ── AN UNSET CHOICE IS THE DEFAULT, NOT "NONE" ──────────────────────────────
+ * `getItem` answers null for somebody who has never opened the picker, and that
+ * is the state most customers are in for ever. Reading that silence as "none"
+ * meant the app shipped its Kenyan floor to nobody except the handful of people
+ * who went looking for it in Settings.
+ *
+ * "None" is still a choice a customer can make — the picker writes the literal
+ * string, which is a real stored value and therefore survives this. The only
+ * thing that changed is what SILENCE means.
+ */
 function read(): string {
   try {
     return localStorage.getItem(KEY) ?? memory;
@@ -60,7 +75,7 @@ export function useWallpaper(): {
 } {
   // The snapshot has to be a PRIMITIVE. Returning wallpaperFor(...) here hands
   // React a fresh object every call and it re-renders for ever comparing them.
-  const id = useSyncExternalStore(subscribe, read, () => NO_WALLPAPER);
+  const id = useSyncExternalStore(subscribe, read, () => DEFAULT_WALLPAPER);
 
   const setWallpaper = useCallback((next: string) => {
     memory = next;

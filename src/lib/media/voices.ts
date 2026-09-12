@@ -2,7 +2,7 @@
 // THE PLATES ON THE FRONT DOOR.
 //
 // Kenya, on the half of the sign-in screen that is not the form. These are the
-// people who actually borrow here: a mama mboga, a fundi, a duka owner, a boda
+// people who actually borrow here: a butcher, a duka owner, a farmer, a boda
 // rider. Nothing on this screen is a stock photograph of a laptop.
 //
 // ── WHY THESE ARE PROMISES AND NOT TESTIMONIALS ──────────────────────────────
@@ -22,6 +22,15 @@
 // picture is rather than who. Same effect, nothing invented. When real
 // customers consent to be quoted, the shape below already has room for them and
 // the change is data, not code.
+//
+// ── THE ORDER IS THE ORDER, AND IT IS DELIBERATE ─────────────────────────────
+// The deck plays top to bottom and loops, so this array IS the running order of
+// the front door. It opens on the butchery — the strongest frame of the eight
+// and the one whose promise ("buy the whole carcass at the better price") is the
+// clearest statement of what short-term working capital is actually for — and
+// then walks the spread of the book: retail, agriculture, transport, produce,
+// trades, garments, services. Reordering this file reorders the screen; there is
+// no second list anywhere that also has to be touched.
 //
 // ── THE COMPOSITION RULE ─────────────────────────────────────────────────────
 // The photograph is a CARD here, not a background: it has its own frame, its own
@@ -51,6 +60,38 @@ export type Voice = {
 
 export const VOICES: Voice[] = [
   {
+    id: "butcher",
+    file: "/images/login/ke-butcher.webp",
+    title: "Buy the whole carcass at the better price.",
+    body: "Short-term credit sized to a day's trade, so buying in bulk is finally worth it.",
+    caption: "A butchery counter",
+    alt: "A Kenyan butcher preparing cuts behind the counter.",
+  },
+  {
+    id: "duka",
+    file: "/images/login/ke-duka.webp",
+    title: "Every decision explained. Never a silent no.",
+    body: "See exactly what your limit is built from — and what would move it.",
+    caption: "A neighbourhood duka",
+    alt: "A Kenyan shopkeeper checking stock on her phone behind the counter.",
+  },
+  {
+    id: "farmer",
+    file: "/images/login/ke-farmer.webp",
+    title: "Seed, fertiliser, labour — timed to the season.",
+    body: "Borrow when the ground is ready and repay when the crop sells.",
+    caption: "A smallholding at first light",
+    alt: "A Kenyan farmer working a smallholding in the early morning.",
+  },
+  {
+    id: "boda",
+    file: "/images/login/ke-boda.webp",
+    title: "Repay from your phone, wherever the day takes you.",
+    body: "M-Pesa STK, standing orders, and a statement you can actually read.",
+    caption: "A boda stage at dusk",
+    alt: "A Kenyan boda boda rider pausing beside his motorcycle at dusk.",
+  },
+  {
     id: "mama-mboga",
     file: "/images/login/ke-mama-mboga.webp",
     title: "Your business does not wait. Neither should your loan.",
@@ -67,38 +108,6 @@ export const VOICES: Voice[] = [
     alt: "A Kenyan craftsman measuring timber in his workshop.",
   },
   {
-    id: "duka",
-    file: "/images/login/ke-duka.webp",
-    title: "Every decision explained. Never a silent no.",
-    body: "See exactly what your limit is built from — and what would move it.",
-    caption: "A neighbourhood duka",
-    alt: "A Kenyan shopkeeper checking stock on her phone behind the counter.",
-  },
-  {
-    id: "boda",
-    file: "/images/login/ke-boda.webp",
-    title: "Repay from your phone, wherever the day takes you.",
-    body: "M-Pesa STK, standing orders, and a statement you can actually read.",
-    caption: "A boda stage at dusk",
-    alt: "A Kenyan boda boda rider pausing beside his motorcycle at dusk.",
-  },
-
-  // ── THE SECOND FOUR ─────────────────────────────────────────────────────
-  // The deck was built for four and shuffles through however many are here, so
-  // this is data rather than a change to the component.
-  //
-  // WHY MORE AT ALL: four plates on a five-second rotation is a twenty-second
-  // loop, and the front door is a screen people sit in front of for longer than
-  // that — twice, if the first password attempt fails. A visible loop turns a
-  // photograph into a slideshow, which is the register this panel exists to
-  // avoid. Eight is forty seconds and reads as a stack rather than a cycle.
-  //
-  // And the trades are chosen, not collected: a tailor, a farmer, a salon and a
-  // butcher are four more of the book, and between them the eight cover the
-  // actual spread of what Micromart lends against. Every promise below is one
-  // the product can be held to — see the note at the top of this file about why
-  // none of these is a testimonial.
-  {
     id: "tailor",
     file: "/images/login/ke-tailor.webp",
     title: "Buy the fabric before the order, not after.",
@@ -107,27 +116,11 @@ export const VOICES: Voice[] = [
     alt: "A Kenyan tailor guiding cloth through a sewing machine.",
   },
   {
-    id: "farmer",
-    file: "/images/login/ke-farmer.webp",
-    title: "Seed, fertiliser, labour — timed to the season.",
-    body: "Borrow when the ground is ready and repay when the crop sells.",
-    caption: "A smallholding at first light",
-    alt: "A Kenyan farmer working a smallholding in the early morning.",
-  },
-  {
     id: "salon",
     file: "/images/login/ke-salon.webp",
     title: "Stock the chair, not just fill it.",
     body: "Working capital for product and equipment, repaid in small pieces from takings.",
     caption: "A salon, mid-appointment",
     alt: "A Kenyan hairdresser working with a client in her salon.",
-  },
-  {
-    id: "butcher",
-    file: "/images/login/ke-butcher.webp",
-    title: "Buy the whole carcass at the better price.",
-    body: "Short-term credit sized to a day's trade, so buying in bulk is finally worth it.",
-    caption: "A butchery counter",
-    alt: "A Kenyan butcher preparing cuts behind the counter.",
   },
 ];

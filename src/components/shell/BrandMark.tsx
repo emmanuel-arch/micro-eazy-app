@@ -38,24 +38,48 @@
 
 export function BrandMark({
   size = 52,
+  sizeLg,
   framed = false,
   className = "",
 }: {
   /** The box the artwork is contained in. With `framed`, the plate's padding
    *  sits OUTSIDE this, so a framed 56 is a ~76px plate. */
   size?: number;
+  /**
+   * The box above `lg`, for the corners where the mark has a different job on a
+   * laptop than on a handset.
+   *
+   * ── WHY THIS IS A PROP AND NOT A UTILITY CLASS ────────────────────────────
+   * The box used to be an inline `width`/`height`, and an inline declaration
+   * beats a stylesheet rule on the same element — so a caller writing
+   * `lg:h-[72px]` was silently ignored, which is the worst kind of API: one
+   * that looks like it worked. Both sizes now travel as CSS CUSTOM PROPERTIES,
+   * which inline style may legally set, and `.brand-mark` in styles/theme.css
+   * is what reads them at each breakpoint. The cascade does the work and
+   * nothing in this file knows what a breakpoint is.
+   */
+  sizeLg?: number;
   /** Wear the plate — for the corners the mark has to hold by itself. */
   framed?: boolean;
   className?: string;
 }) {
   const mark = (
     <span
-      className={`brand-chip grid shrink-0 place-items-center overflow-hidden ${framed ? "" : className}`}
-      style={{ width: size, height: size }}
+      className={`brand-mark brand-chip grid shrink-0 place-items-center overflow-hidden ${framed ? "" : className}`}
+      style={
+        {
+          "--mark": `${size}px`,
+          "--mark-lg": `${sizeLg ?? size}px`,
+        } as React.CSSProperties
+      }
     >
       <img
         src="/brand/micro-eazy/logo-mark.png"
         alt=""
+        // Intrinsic dimensions, so the box is reserved before the file lands.
+        // The RENDERED size is h-full/w-full inside a parent the custom
+        // properties above have already sized — which is what lets `sizeLg`
+        // change the box without this attribute disagreeing with it.
         width={size}
         height={size}
         className="h-full w-full object-contain"

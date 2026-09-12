@@ -166,19 +166,34 @@ export default function Welcome() {
           </p>
         )}
 
-        {/* ── THE THREE DOORS, AS ONE FAMILY ────────────────────────────────
-            They used to be three different species: a saturated green pill, a
-            hairline outlined button, and a bordered row with an icon. The
-            hierarchy that created was wrong — it read as one real option and
-            two afterthoughts, when "Already with Micromart?" is the door MOST
-            people need on day one. Micromart's existing book is tens of
-            thousands of people who already hold a password sent from
-            Micromart's own outbox.
+        {/* ── THE THREE DOORS: ONE SHAPE, THREE COLOURS, ONE WORD EACH ──────
+            These have now been wrong in two opposite directions, and both
+            failures are worth keeping written down.
 
-            Now they are one material at one weight, separated by ACCENT: the
-            first carries the brand light, the other two do not. Emphasis within
-            a set, rather than three different classes of thing. See
-            .glass-option in styles/theme.css. */}
+            FIRST they were three different species — a saturated green pill, a
+            hairline outlined button, and a bordered row with an icon. That read
+            as one real option and two afterthoughts, when "already with
+            Micromart" is the door MOST people need on day one: Micromart's
+            existing book is tens of thousands of people who already hold a
+            password sent from Micromart's own outbox.
+
+            THEN, correcting it, they became three identical cards separated only
+            by a small tinted icon — each carrying a bold label AND a grey line
+            of explanation underneath. Six lines of type in a stack of three
+            controls. The eye could no longer choose without READING, and on the
+            first screen of a product opened on a prepaid bundle at the side of a
+            road, reading is the most expensive thing you can ask for.
+
+            So: one shape, three COLOURS, one word each. Green is forward, blue
+            is new, gold is the key you already have — carried in .glass-tile's
+            --tone (see styles/theme.css), which also owns the hover: a lift with
+            a little overshoot, a tone-coloured glow, and one pass of light
+            across the face. The colour does the sorting the paragraphs used to
+            do, and it does it before the eye has focused.
+
+            What the sub-lines were saying has not been thrown away — it is on
+            each button's accessible name, where it reaches the people who were
+            actually relying on it. */}
         <div className="mt-5 space-y-2.5">
           <button
             type="submit"
@@ -186,30 +201,23 @@ export default function Welcome() {
               intentRef.current = "continue";
             }}
             disabled={busy}
-            className="glass-option glass-option--primary px-4 py-3.5"
+            aria-label="Continue — we send a code to this number"
+            className="glass-tile tone-green px-4 py-3.5"
           >
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-              style={{ background: "color-mix(in oklab, var(--green) 22%, transparent)", color: "var(--green-ink)" }}
-            >
+            <span className="glass-tile__chip">
               {busy ? (
                 <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.4} />
               ) : (
                 <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} />
               )}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-bold leading-tight text-ink">
-                {busy ? "Sending your code" : "Continue"}
-              </span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
-                {busy ? "One moment." : "We send a code to this number."}
-              </span>
+            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">
+              {busy ? "Sending your code" : "Continue"}
             </span>
           </button>
 
           {/* Same code, same gate, different destination. It submits the form
-              like the card above it — the code still has to reach the handset
+              like the tile above it — the code still has to reach the handset
               first — and only sets where the customer lands afterwards.
 
               It grants nothing. Onboarding is still behind the session, the KYC
@@ -222,43 +230,36 @@ export default function Welcome() {
               intentRef.current = "join";
             }}
             disabled={busy}
-            className="glass-option px-4 py-3.5"
+            aria-label="Create account — new here, it takes about two minutes"
+            className="glass-tile tone-blue px-4 py-3.5"
           >
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-              style={{ background: "color-mix(in oklab, var(--lime) 20%, transparent)", color: "var(--green-ink)" }}
-            >
-              <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            <span className="glass-tile__chip">
+              <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.3} />
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-bold leading-tight text-ink">Create an account</span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
-                New here? It takes about two minutes.
-              </span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Create account</span>
+            <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
           </button>
 
-          {/* Not a footnote. On day one this is the door most people need. */}
+          {/* ── THE MICROMART DOOR, IN TWO WORDS ──────────────────────────
+              Not a footnote. On day one this is the door most people need, and
+              naming the DESTINATION is what makes it minimal without making it
+              cryptic: an existing Micromart customer recognises their lender's
+              name instantly, and somebody who has never heard of Micromart
+              correctly reads it as not-for-them and moves on. "Already with
+              Micromart? / Sign in with the password they sent you." said the
+              same thing in fourteen words and a second line of grey type. */}
           <button
             type="button"
             onClick={() => navigate("/signin")}
             disabled={busy}
-            className="glass-option px-4 py-3.5"
+            aria-label="Micromart login — sign in with the password Micromart sent you"
+            className="glass-tile tone-gold px-4 py-3.5"
           >
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-              style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
-            >
-              <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            <span className="glass-tile__chip">
+              <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.3} />
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-bold leading-tight text-ink">Already with Micromart?</span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">
-                Sign in with the password they sent you.
-              </span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
+            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Micromart login</span>
+            <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
           </button>
         </div>
       </form>

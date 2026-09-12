@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Micro Eazy — shell preview</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        var p = new URLSearchParams(location.search);
+        var dark = p.get("theme") === "dark";
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        try {
+          // Through storage, not just the attribute: ThemeProvider reads this
+          // key on mount and re-stamps the attribute, so setting the attribute
+          // alone is overwritten one frame later.
+          localStorage.setItem("me.theme", dark ? "dark" : "light");
+          localStorage.setItem("me.wallpaper", p.get("wallpaper") || "nairobi-dawn");
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/preview.tsx"></script>
+    <!-- ?pane=1 walks the deck sideways, so a screenshot can be taken of a pane
+         that is not the first one. The deck listens for ArrowRight on window. -->
+    <script>
+      window.addEventListener("load", function () {
+        var n = +(new URLSearchParams(location.search).get("pane") || 0);
+        setTimeout(function () {
+          for (var i = 0; i < n; i++) {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+          }
+        }, 600);
+      });
+    </script>
+  </body>
+</html>

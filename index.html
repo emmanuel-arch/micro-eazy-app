@@ -58,9 +58,9 @@
           if (m) m.setAttribute("content", dark ? "#04060e" : "#012863");
 
           // ── THE WALLPAPER, PRELOADED BEFORE REACT EXISTS ────────────────
-          // Only the ONE the customer actually chose, and only when they have
-          // chosen one — the default is no picture at all, which costs nothing
-          // and is the state most people are in.
+          // Only ONE file — the one the customer chose, or the default when
+          // they have never opened the picker, which is the state most people
+          // are in. An explicit "none" is still honoured and fetches nothing.
           //
           // This is a `preload` hint rather than a paint: the floor itself is
           // drawn by components/shell/Wallpaper.tsx, which ladders through the
@@ -70,8 +70,9 @@
           // is the difference between a floor that fades in during the splash
           // and one that fades in after somebody is already reading.
           //
-          // Keep "me.wallpaper" in step with lib/wallpaper.ts.
-          var wp = localStorage.getItem("me.wallpaper");
+          // Keep "me.wallpaper" and the default id in step with
+          // lib/wallpaper.ts and lib/media/wallpapers.ts.
+          var wp = localStorage.getItem("me.wallpaper") || "nairobi-dawn";
           if (wp && wp !== "none" && /^[a-z0-9-]+$/.test(wp)) {
             var l = document.createElement("link");
             l.rel = "preload";

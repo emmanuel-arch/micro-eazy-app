@@ -9,29 +9,47 @@
 // text sitting directly on it looks like a splash screen; a card lifted onto it
 // looks like a bank.
 //
-// The order down the page is the order of the questions a borrower actually
-// asks, which is not the order a lender would put them in:
-//   1. How much can I get, and what do I owe?      (the balance)
-//   2. What can I do right now?                     (the four tiles)
-//   3. Why did you decide that?                     (the reason strip)
-//   4. Has anyone told me anything?                 (the lender's own messages)
+// ── IT GOES SIDEWAYS NOW, NOT DOWN ──────────────────────────────────────────
+// On a laptop this screen is a DECK of three panes inside a fixed frame (see
+// components/shell/Deck.tsx and the landscape note in AppShell). It does not
+// scroll. Everything a customer opened the app for is in the first pane, on
+// screen, with the legal footer under it; the rest is one flick of the wheel
+// sideways, in the same rectangle at the same size.
 //
-// ── ON THE DESKTOP SPLIT ────────────────────────────────────────────────────
-// Above `xl` this becomes two columns, and which things move right is not
-// arbitrary. The left column is everything the customer CAME to do — the
-// balance, the actions, the reason behind the number. The right column is
-// everything that is true whether or not they act: what is next, what the lender
-// has said, what they might want to learn. On a phone that same split becomes
-// simple vertical order, because a phone has no right-hand side.
+// The three panes are three QUESTIONS, which is the same ordering principle the
+// single column used — it is only the axis that changed:
+//
+//   1. YOUR MONEY    What can I get, what do I owe, what is due, who wrote to me.
+//   2. WHAT NEXT     What can I do right now, and what does the lender think of
+//                    me. (Anything blocking — an unverified ID, an application
+//                    mid-flight — is promoted into pane 1, because a customer
+//                    whose next action is "finish your ID" must not have to go
+//                    looking for that.)
+//   3. ADVICE        The things worth reading when nothing needs doing.
+//
+// On a phone the deck is a plain vertical stack in exactly that order, so the
+// handset layout is unchanged and still the design target.
+//
+// ── THE NUMBER AND ITS REASON TRAVEL TOGETHER ───────────────────────────────
+// The tier badge beside "Available to borrow" used to read "Major risk" — a
+// generic label from a model, in a shield, next to the amount. It said something
+// unpleasant without saying anything useful, and the actual credit score (a real
+// figure on a real scale that moves with every repayment) was in a card further
+// down the page that most people never reached.
+//
+// So the SCORE is what sits beside the limit now, and "Why your limit is KSh
+// 50,000" is directly under it. A number and the reason for it, in one glance,
+// on the first pane — which is the promise the footer of this app makes.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowRight, Banknote, Gauge, ShieldCheck, FileText, Landmark, ChevronRight,
+  ArrowRight, Banknote, Gauge, FileText, Landmark, ChevronRight,
   CalendarClock, MessageSquareText, CloudOff, ScanFace, Route as RouteIcon,
   PiggyBank, Smartphone,
 } from "lucide-react";
 import { Sky } from "../components/shell/Sky";
+import { Deck, type Pane } from "../components/shell/Deck";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { Artwork } from "../components/media/Artwork";
 import { ChannelBadge } from "../components/shell/ChannelBadge";
@@ -73,6 +91,25 @@ const ACTIONS = [
   { icon: FileText, label: "Statements", note: "Crunch a new one", tint: "#a78bfa", to: "/join?step=statement" },
 ];
 
+/**
+ * The shape every pane of this screen is laid out in.
+ *
+ * The split is the one the single column already implied and is now able to
+ * honour: LEFT is what the customer came to do, RIGHT is what is true whether or
+ * not they act. It starts at `lg` rather than `xl` because `lg` is where the
+ * landscape rule begins — a pane that stayed one column between 1024 and 1280
+ * would be the only place in the app tall enough to need scrolling, which is the
+ * exact thing the deck exists to remove.
+ */
+function PaneGrid({ left, right }: { left: ReactNode; right?: ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="space-y-3">{left}</div>
+      {right && <div className="space-y-3">{right}</div>}
+    </div>
+  );
+}
+
 export default function Home({
   data = SAMPLE_HOME,
   /** Refetch after a prompt is raised, so the balance catches up on its own. */
@@ -98,575 +135,719 @@ export default function Home({
   // screen readers announce twice and keyboards tab into twice.
   const go = useNavigate();
 
-  return (
-    <>
-      <Sky title={data.firstName ? `Hello, ${data.firstName}` : "Hello"}>
-        <p className="max-w-[34ch] text-[13px] leading-relaxed text-sky-ink-soft">
-          Your limit is reviewed every time you repay. Nothing here is decided by a person.
-        </p>
-      </Sky>
+  const tone = SCORE_TONE[data.scoreTone ?? "warn"];
 
-      {/* `relative z-10` is load-bearing, not tidiness. The Sky is a positioned
-          element, so it paints ABOVE any static sibling regardless of DOM order —
-          which meant the header covered the top of this card and swallowed both
-          the label and the tier badge. Only visible in the light theme, because
-          in the dark one the card is translucent and it read as a tint. */}
-      <div className="relative z-10 -mt-12">
-        <ChannelBadge />
+  // ── THE POSITION ──────────────────────────────────────────────────────────
+  const money = (
+    <section className="card p-5">
+      {bookDown ? (
+        <div className="flex items-start gap-3">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: "color-mix(in oklab, #f59e0b 16%, transparent)", color: "#b45309" }}
+          >
+            <CloudOff className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold">We could not reach {data.lender}</p>
+            <p className="mt-1 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
+              Your balance and limit live on their system and it did not answer just now. Nothing has changed —
+              we simply cannot show you the figures until it does.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── THE THREE NUMBERS, SIDE BY SIDE ────────────────────────────
+              This card showed one figure — what you can borrow — and a
+              customer's two other standing questions ("what have I put aside?",
+              "what do I still owe?") were nowhere on the screen the app is
+              judged by.
 
-        <div className="px-4 xl:grid xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] xl:items-start xl:gap-4">
-          {/* ── LEFT: what you came to do. ───────────────────────────────── */}
-          <div className="space-y-3">
-            <section className="card p-5">
-              {bookDown ? (
-                <div className="flex items-start gap-3">
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                    style={{ background: "color-mix(in oklab, #f59e0b 16%, transparent)", color: "#b45309" }}
-                  >
-                    <CloudOff className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-semibold">We could not reach {data.lender}</p>
-                    <p className="mt-1 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
-                      Your balance and limit live on their system and it did not answer just now. Nothing has changed —
-                      we simply cannot show you the figures until it does.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* ── THE THREE NUMBERS, SIDE BY SIDE ────────────────────
-                      This card showed one figure — what you can borrow — and a
-                      customer's two other standing questions ("what have I put
-                      aside?", "what do I still owe?") were nowhere on the
-                      screen the app is judged by.
+              They belong TOGETHER because they are read together: the three of
+              them are a position, and a position read one number at a time is
+              not a position. Borrowing headlines because it is why most people
+              open the app; savings and the balance sit beside it at a smaller
+              weight, which is hierarchy rather than omission. */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+                Available to borrow
+              </p>
+              {/* 30px below `sm`. The score chip beside it takes ~120px, and at
+                  34px a six-figure limit wrapped onto two lines on a 390px
+                  handset — the headline number of the whole app, broken across a
+                  line by a chip that was added next to it. */}
+              <p className="tnum mt-1 text-[30px] font-bold leading-none tracking-[-0.03em] sm:text-[34px]">
+                {kes(data.available)}
+              </p>
+              <p className="mt-1.5 text-[12px] text-ink-soft">of {kes(data.limit)} limit</p>
+            </div>
 
-                      They belong TOGETHER because they are read together: the
-                      three of them are a position, and a position read one
-                      number at a time is not a position. Borrowing headlines
-                      because it is why most people open the app; savings and
-                      the balance sit beside it at a smaller weight, which is
-                      hierarchy rather than omission. */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
-                        Available to borrow
-                      </p>
-                      <p className="tnum mt-1 text-[34px] font-bold leading-none tracking-[-0.03em]">
-                        {kes(data.available)}
-                      </p>
-                      <p className="mt-1.5 text-[12px] text-ink-soft">of {kes(data.limit)} limit</p>
-                    </div>
-                    {/* The band is the risk tier and a customer may not have one
-                        yet. An empty pill reading "undefined" is worse than no
-                        pill, so it renders only when there is something in it. */}
-                    {data.band && (
-                      <span
-                        className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
-                        style={{ background: "color-mix(in oklab, var(--lime) 22%, transparent)", color: "var(--green-ink)" }}
-                      >
-                        <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.4} /> {data.band}
-                      </span>
-                    )}
-                  </div>
+            {/* ── THE SCORE, WHERE THE BADGE USED TO BE ──────────────────
+                This slot held the risk BAND — "Major risk" in a shield, in
+                brand green. Three things wrong with it, and the third is the
+                one that matters:
 
-                  {/* The bar carries the same information as the numbers above it,
-                      which is the point: a number is read, a bar is GLANCED. */}
-                  <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-sunk)" }}>
-                    <div
-                      className="h-full rounded-full transition-[width] duration-700"
-                      style={{
-                        width: `${Math.max(used * 100, data.outstanding > 0 ? 6 : 0)}%`,
-                        background: "linear-gradient(90deg, var(--green), var(--lime))",
-                      }}
-                    />
-                  </div>
+                  · The words were the model's, not the customer's. "Major
+                    risk" is a tier name from an underwriting table.
+                  · It was green. A warning rendered in the brand's own
+                    reassurance colour is worse than no warning.
+                  · It was not ACTIONABLE. A band cannot go up on Tuesday. A
+                    score can, and does, every time somebody repays — which is
+                    the entire behavioural promise of a lending app.
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    {/* ── SAVINGS ──────────────────────────────────────────
-                        `Transactions.dbo.AccountSavings` on the lender's book —
-                        where an overpayment goes when their RepaymentTrigger
-                        has cleared the loan and money is left over. Customers
-                        have been accruing this for years with no way to see it.
+                So the real figure sits here instead, in the tone the model
+                assigned it, linked to the screen that explains it. The band has
+                not been deleted; it is still on the score card in pane 2, where
+                it belongs next to its own drivers.
 
-                        `null` is "we could not ask" and renders as a dash. A
-                        present zero is "you have saved nothing yet" and renders
-                        as KSh 0, which is a true and useful statement. Showing
-                        the first as the second is the same error as showing an
-                        outage as a cleared balance. */}
-                    <div className="rounded-xl p-3" style={{ background: "var(--surface-sunk)" }}>
-                      <div className="flex items-center gap-1.5">
-                        <PiggyBank className="h-3.5 w-3.5 shrink-0" strokeWidth={2.3} style={{ color: "var(--green-ink)" }} />
-                        <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">Savings</p>
-                      </div>
-                      <p className="tnum mt-1 text-[19px] font-bold leading-none tracking-[-0.02em]">
-                        {data.savings ? kes(data.savings.balance) : "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-snug text-ink-faint">
-                        {!data.savings
-                          ? "We could not read this just now"
-                          : data.savings.lastAt
-                            ? `Last movement ${shortDate(data.savings.lastAt)}`
-                            : "Nothing put aside yet"}
-                      </p>
-                    </div>
-
-                    {/* ── OUTSTANDING ──────────────────────────────────────
-                        The other half of the position. Coloured only when
-                        there IS a balance: a green zero and a red 12,500 in the
-                        same slot is how a glance goes wrong. */}
-                    <div className="rounded-xl p-3" style={{ background: "var(--surface-sunk)" }}>
-                      <div className="flex items-center gap-1.5">
-                        <Landmark className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.3} />
-                        <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">
-                          You owe
-                        </p>
-                      </div>
-                      <p
-                        className="tnum mt-1 text-[19px] font-bold leading-none tracking-[-0.02em]"
-                        style={data.outstanding > 0 ? { color: "#b45309" } : undefined}
-                      >
-                        {kes(data.outstanding)}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-snug text-ink-faint">
-                        {data.outstanding > 0
-                          ? `Across ${data.loanCount} loan${data.loanCount === 1 ? "" : "s"}`
-                          : "Nothing outstanding"}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* ── THE COMMIT ROW ───────────────────────────────────────────
-                  "Repay" used to navigate to a screen. Pay Now raises the
-                  M-PESA prompt from here, which is the difference between
-                  telling somebody where to go and letting them do it: every
-                  shilling on this book has previously arrived because somebody
-                  was chased for it.
-
-                  It stays second to "Apply" only when there is nothing owed.
-                  With a live balance, paying is the more useful act and the
-                  buttons swap emphasis — the screen should lead with what this
-                  particular customer's position calls for. */}
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                {data.outstanding > 0 ? (
-                  <>
-                    <LiquidButton
-                      icon={Smartphone}
-                      trailingIcon={ArrowRight}
-                      size="lg"
-                      block
-                      onClick={() => setPaying(true)}
-                    >
-                      Pay now
-                    </LiquidButton>
-                    <LiquidButton variant="metal" size="lg" block onClick={() => go("/join")}>
-                      Apply for a loan
-                    </LiquidButton>
-                  </>
-                ) : (
-                  <>
-                    <LiquidButton icon={Banknote} trailingIcon={ArrowRight} size="lg" block onClick={() => go("/join")}>
-                      Apply for a loan
-                    </LiquidButton>
-                    <LiquidButton variant="metal" icon={Smartphone} size="lg" block onClick={() => setPaying(true)}>
-                      Pay now
-                    </LiquidButton>
-                  </>
-                )}
-              </div>
-            </section>
-
-            {/* ── THE TWO THINGS THAT OUTRANK EVERYTHING BELOW ──────────────
-                An unverified ID and an application mid-workflow are both states
-                where the customer's next action is NOT "apply for a loan" — and
-                leaving the apply button as the loudest thing on the screen sends
-                them into a funnel that will refuse them at the end. */}
-            {data.kycStatus !== "VERIFIED" && data.kycStatus !== "NONE" && (
-              <Link to="/identity" className="card flex w-full items-center gap-3 p-4 text-left">
-                <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                  style={{ background: "color-mix(in oklab, #818cf8 18%, transparent)", color: "#4f46e5" }}
-                >
-                  <ScanFace className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-semibold leading-tight">
-                    {data.kycStatus === "PENDING_REVIEW" ? "Your ID is with our team" : "Finish verifying your ID"}
-                  </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
-                    {data.kycStatus === "PENDING_REVIEW"
-                      ? "A person is checking it. We will message you the moment it clears."
-                      : "You cannot borrow until this is done. It takes about a minute."}
-                  </span>
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
-              </Link>
-            )}
-
-            {data.application && (
-              <Link to="/track" className="card flex w-full items-center gap-3 p-4 text-left">
-                <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                  style={{ background: "color-mix(in oklab, var(--lime) 22%, transparent)", color: "var(--green-ink)" }}
-                >
-                  <RouteIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-semibold leading-tight">
-                    {kes(data.application.amount)} on {data.application.product ?? "your application"}
-                  </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
-                    {data.application.stageTitle
-                      ? `With ${data.application.stageTitle} — follow it through every stage.`
-                      : "In progress — follow it through every stage."}
-                  </span>
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
-              </Link>
-            )}
-
-            <section className="grid grid-cols-2 gap-3">
-              {ACTIONS.map((a) => (
-                <Link
-                  key={a.label}
-                  to={a.to}
-                  className="card group flex items-start gap-3 p-4 text-left transition-transform duration-200 active:scale-[0.985]"
-                >
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                    style={{ background: `color-mix(in oklab, ${a.tint} 16%, transparent)`, color: a.tint }}
-                  >
-                    <a.icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-semibold leading-tight">{a.label}</span>
-                    <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">{a.note}</span>
-                  </span>
-                </Link>
-              ))}
-            </section>
-
-            {/* ── THE SCORE ────────────────────────────────────────────────
-                A real number on a real scale, 300–900, that moves with every
-                repayment — which is the entire behavioural promise of a lending
-                app and was previously a link to a screen.
-
-                It renders ONLY when there is a score. A customer who has not
-                been scored has no score, which is different from a bad one, and
-                a gauge sitting at zero says the second. The link below survives
-                either way, because "how is my limit set" is a fair question
-                whether or not there is a number yet. */}
+                It renders only when there IS a score. A customer who has not
+                been scored has no score, which is a different thing from a bad
+                one — and a chip reading "— / 900" says the second. */}
             {data.score != null && (
-              <Link to="/score" className="card block p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
-                      Your credit score
-                    </p>
-                    <p className="mt-1 flex items-baseline gap-1.5">
-                      <span
-                        className="tnum text-[34px] font-bold leading-none tracking-[-0.03em]"
-                        style={{ color: SCORE_TONE[data.scoreTone ?? "warn"].ink }}
-                      >
-                        {data.score}
-                      </span>
-                      <span className="text-[14px] font-semibold text-ink-faint">/ {data.scoreMax}</span>
-                    </p>
-                    {data.band && <p className="mt-1.5 text-[12px] text-ink-soft">{data.band}</p>}
-                  </div>
-                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-faint" />
-                </div>
-
-                {/* The scale starts at 300, not 0 — a 584 drawn on a 0–900 bar
-                    reads as two thirds of the way along, and on the scale the
-                    number actually lives on it is closer to a half. Drawing it
-                    against the wrong floor flatters every customer. */}
-                <div className="mt-4 h-2.5 overflow-hidden rounded-full" style={{ background: "var(--surface-sunk)" }}>
-                  <div
-                    className="h-full rounded-full transition-[width] duration-700"
+              <Link
+                to="/score"
+                aria-label={`Your credit score is ${data.score} out of ${data.scoreMax}. See what moved it.`}
+                className="group shrink-0 rounded-xl px-3 py-2 text-right transition-colors"
+                style={{ background: "var(--surface-sunk)" }}
+              >
+                <span className="flex items-center justify-end gap-1.5">
+                  <Gauge className="h-3 w-3" strokeWidth={2.5} style={{ color: tone.ink }} />
+                  {/* "Score" on a handset. The chip sits beside the headline
+                      figure, and every pixel of label here is a pixel the limit
+                      does not have — at "Credit score" a six-figure limit wrapped
+                      onto two lines at 390px. The gauge icon beside it carries
+                      the rest of the meaning, and the link's aria-label says the
+                      whole thing for anyone who cannot see either. */}
+                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">
+                    <span className="sm:hidden">Score</span>
+                    <span className="hidden sm:inline">Credit score</span>
+                  </span>
+                </span>
+                <span className="mt-1 flex items-baseline justify-end gap-1">
+                  <span
+                    className="tnum text-[22px] font-bold leading-none tracking-[-0.02em]"
+                    style={{ color: tone.ink }}
+                  >
+                    {data.score}
+                  </span>
+                  <span className="tnum text-[12px] font-semibold text-ink-faint">/ {data.scoreMax}</span>
+                </span>
+                {/* The same 300-floor scale as the full card, so the two can
+                    never draw the same number at two different lengths. */}
+                {/* Hidden on the narrowest handsets: it is a second, smaller
+                    drawing of a number that is already right above it, and the
+                    width it costs is width the limit needs more. */}
+                <span
+                  aria-hidden
+                  className="mt-1.5 hidden h-1 w-[84px] overflow-hidden rounded-full sm:block"
+                  style={{ background: "var(--line-strong)" }}
+                >
+                  <span
+                    className="block h-full rounded-full transition-[width] duration-700"
                     style={{
-                      width: `${Math.min(100, Math.max(2, ((data.score - 300) / (data.scoreMax - 300)) * 100))}%`,
-                      background: SCORE_TONE[data.scoreTone ?? "warn"].fill,
+                      width: `${Math.min(100, Math.max(4, ((data.score - 300) / (data.scoreMax - 300)) * 100))}%`,
+                      background: tone.fill,
                     }}
                   />
-                </div>
-                <div className="mt-1.5 flex justify-between text-[10.5px] text-ink-faint">
-                  <span className="tnum">300</span>
-                  <span className="tnum">{data.scoreMax}</span>
-                </div>
-
-                {/* What moved it. The footer of this screen promises that every
-                    decision on it can be explained on request — this is that
-                    promise kept where the number is, rather than in a call. */}
-                {data.scoreDrivers.length > 0 && (
-                  <ul className="mt-3 space-y-1.5 border-t pt-3" style={{ borderColor: "var(--line)" }}>
-                    {data.scoreDrivers.slice(0, 3).map((d) => (
-                      <li key={d.factor} className="flex items-center gap-2 text-[11.5px] leading-snug text-ink-soft">
-                        <span
-                          aria-hidden
-                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold"
-                          style={{
-                            background:
-                              d.direction === "reduces"
-                                ? "color-mix(in oklab, var(--green) 20%, transparent)"
-                                : "color-mix(in oklab, #f59e0b 22%, transparent)",
-                            color: d.direction === "reduces" ? "var(--green-ink)" : "#b45309",
-                          }}
-                        >
-                          {d.direction === "reduces" ? "↑" : "↓"}
-                        </span>
-                        <span className="min-w-0 truncate">{d.factor}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                </span>
               </Link>
-            )}
-
-            {/* The commitment, not a footnote. */}
-            <Link to="/score" className="card flex w-full items-center gap-3 p-4 text-left">
-              <span
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
-              >
-                <Gauge className="h-[18px] w-[18px]" strokeWidth={2.2} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold leading-tight">
-                  {data.limit > 0 ? `Why your limit is ${kes(data.limit)}` : "How your limit is set"}
-                </span>
-                <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
-                  The four things that moved your score, in plain language.
-                </span>
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
-            </Link>
-
-            {/* ── The schedule. ────────────────────────────────────────────
-                Every collections call centre in Kenya exists largely to answer
-                "how much do I still owe and when is the next one" down a phone.
-                It is not a hard question. It has simply never been on the
-                customer's own screen — so putting it here removes calls rather
-                than deflecting them, which is a different and better thing. */}
-            {/* Rendered only when there IS one. A bridged lender's loan feed
-                carries no instalment breakdown, so an empty table under the
-                heading "Your schedule" would read as a loan with no repayments
-                due — the opposite of the truth. Silence is the honest state. */}
-            {data.schedule.length > 0 && (
-              <section className="card overflow-hidden">
-                <div
-                  className="flex items-center gap-2.5 border-b px-5 py-3.5"
-                  style={{ borderColor: "var(--line)" }}
-                >
-                  <p className="flex-1 text-[13px] font-semibold">Your schedule</p>
-                  <span className="tnum text-[11.5px] text-ink-faint">
-                    {data.schedule.filter((s) => s.status === "PAID").length} of {data.schedule.length} paid
-                  </span>
-                  <Link to="/repay" className="text-[12px] font-semibold" style={{ color: "var(--green-ink)" }}>
-                    See all
-                  </Link>
-                </div>
-
-                <ul>
-                  {data.schedule.slice(0, 5).map((s, i, rows) => {
-                    const paid = s.status === "PAID";
-                    // "Next" is the first row that is not yet paid — a position,
-                    // not a status the server sends. Deriving it here means the
-                    // highlight cannot disagree with the list it sits in.
-                    const next = !paid && rows.slice(0, i).every((r) => r.status === "PAID");
-                    return (
-                      <li
-                        key={s.seq}
-                        className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0"
-                        style={{
-                          borderColor: "var(--line)",
-                          background: next ? "color-mix(in oklab, var(--lime) 9%, transparent)" : undefined,
-                        }}
-                      >
-                        <span
-                          className="tnum grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[12px] font-bold"
-                          style={{
-                            background: paid
-                              ? "color-mix(in oklab, var(--green) 18%, transparent)"
-                              : "var(--surface-sunk)",
-                            color: paid ? "var(--green-ink)" : "var(--ink-faint)",
-                          }}
-                        >
-                          {paid ? "✓" : s.seq}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[13px] font-medium leading-tight">{shortDate(s.due)}</span>
-                          <span className="mt-0.5 block text-[11.5px] text-ink-faint">
-                            {paid ? "Paid" : s.status === "OVERDUE" ? "Overdue" : next ? "Next" : "Scheduled"}
-                          </span>
-                        </span>
-                        <span
-                          className="tnum shrink-0 text-[13.5px] font-semibold"
-                          style={{ color: paid ? "var(--ink-faint)" : "var(--ink)" }}
-                        >
-                          {kes(s.amount)}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
             )}
           </div>
 
-          {/* ── RIGHT: what is true whether or not you act. ──────────────── */}
-          <aside className="mt-3 space-y-3 xl:mt-0">
-            {/* What is next. The single most asked question in any collections
-                call centre, answered before anybody has to ring. */}
-            <section className="card p-5">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-                  style={{ background: "color-mix(in oklab, #5b8cff 16%, transparent)", color: "#3f6fd8" }}
-                >
-                  <CalendarClock className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                </span>
-                <p className="text-[13px] font-semibold">Your next payment</p>
+          {/* The bar carries the same information as the numbers above it,
+              which is the point: a number is read, a bar is GLANCED. */}
+          <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-sunk)" }}>
+            <div
+              className="h-full rounded-full transition-[width] duration-700"
+              style={{
+                width: `${Math.max(used * 100, data.outstanding > 0 ? 6 : 0)}%`,
+                background: "linear-gradient(90deg, var(--green), var(--lime))",
+              }}
+            />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {/* ── SAVINGS ──────────────────────────────────────────────────
+                `Transactions.dbo.AccountSavings` on the lender's book — where
+                an overpayment goes when their RepaymentTrigger has cleared the
+                loan and money is left over. Customers have been accruing this
+                for years with no way to see it.
+
+                `null` is "we could not ask" and renders as a dash. A present
+                zero is "you have saved nothing yet" and renders as KSh 0, which
+                is a true and useful statement. Showing the first as the second
+                is the same error as showing an outage as a cleared balance. */}
+            <div className="rounded-xl p-3" style={{ background: "var(--surface-sunk)" }}>
+              <div className="flex items-center gap-1.5">
+                <PiggyBank className="h-3.5 w-3.5 shrink-0" strokeWidth={2.3} style={{ color: "var(--green-ink)" }} />
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">Savings</p>
               </div>
+              <p className="tnum mt-1 text-[19px] font-bold leading-none tracking-[-0.02em]">
+                {data.savings ? kes(data.savings.balance) : "—"}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-ink-faint">
+                {!data.savings
+                  ? "We could not read this just now"
+                  : data.savings.lastAt
+                    ? `Last movement ${shortDate(data.savings.lastAt)}`
+                    : "Nothing put aside yet"}
+              </p>
+            </div>
 
-              {loan?.nextDue ? (
-                <>
-                  <p className="tnum mt-3 text-[26px] font-bold leading-none tracking-[-0.02em]">
-                    {kes(loan.nextDue.amount)}
-                  </p>
-                  <p className="mt-1 text-[12px] text-ink-soft">due {shortDate(loan.nextDue.date)}</p>
-                  <LiquidButton size="sm" block className="mt-3" onClick={() => go("/repay")}>
-                    Repay now
-                  </LiquidButton>
-                </>
-              ) : loan ? (
-                // A loan whose instalment breakdown we do not hold. Saying the
-                // BALANCE is honest; inventing a "next payment" from it would put
-                // a date and a figure on screen that the lender never quoted —
-                // and it is precisely the figure a customer would then pay.
-                <>
-                  <p className="tnum mt-3 text-[26px] font-bold leading-none tracking-[-0.02em]">
-                    {kes(loan.balance)}
-                  </p>
-                  <p className="mt-1 text-[12px] text-ink-soft">outstanding on {loan.product ?? "your loan"}</p>
-                  <p className="mt-3 text-[11.5px] leading-snug text-ink-faint">
-                    Your lender holds the instalment dates for this loan. Open Repay to pay any amount towards it.
-                  </p>
-                  <LiquidButton size="sm" block className="mt-3" onClick={() => go("/repay")}>
-                    Repay
-                  </LiquidButton>
-                </>
-              ) : (
-                <>
-                  <p className="mt-3 text-[13px] font-semibold">Nothing due</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
-                    You have no running loan. When you take one, the next payment appears here.
-                  </p>
-                </>
-              )}
-            </section>
-
-            {/* ── REAL CONVERSATIONS, NOT A BROADCAST ────────────────────
-                This panel used to render two invented messages from "Micromart
-                Fintech". It now shows the customer's own threads — the ones an
-                officer is actually answering — so tapping a row opens the reply
-                rather than a dead notification. A channel used for marketing
-                stops being read, and then the message that mattered goes unread
-                with it, which is why nothing but real correspondence is here. */}
-            <section className="card overflow-hidden">
-              <div className="flex items-center gap-2.5 border-b px-5 py-3.5" style={{ borderColor: "var(--line)" }}>
-                <MessageSquareText className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2.1} />
-                <p className="flex-1 text-[13px] font-semibold">Messages</p>
-                {data.unreadMessages > 0 && (
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[10.5px] font-bold"
-                    style={{ background: "color-mix(in oklab, var(--lime) 24%, transparent)", color: "var(--green-ink)" }}
-                  >
-                    {data.unreadMessages} new
-                  </span>
-                )}
+            {/* ── OUTSTANDING ──────────────────────────────────────────────
+                The other half of the position. Coloured only when there IS a
+                balance: a green zero and a red 12,500 in the same slot is how a
+                glance goes wrong. */}
+            <div className="rounded-xl p-3" style={{ background: "var(--surface-sunk)" }}>
+              <div className="flex items-center gap-1.5">
+                <Landmark className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.3} />
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">You owe</p>
               </div>
+              <p
+                className="tnum mt-1 text-[19px] font-bold leading-none tracking-[-0.02em]"
+                style={data.outstanding > 0 ? { color: "#b45309" } : undefined}
+              >
+                {kes(data.outstanding)}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-ink-faint">
+                {data.outstanding > 0
+                  ? `Across ${data.loanCount} loan${data.loanCount === 1 ? "" : "s"}`
+                  : "Nothing outstanding"}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
-              {data.messages.length === 0 ? (
-                <div className="px-5 py-5">
-                  <p className="text-[12.5px] leading-relaxed text-ink-faint">
-                    Nothing yet. If anything about your account or an application is unclear, write to us and a real
-                    person answers.
-                  </p>
-                  <LiquidButton size="sm" variant="metal" block className="mt-3" onClick={() => go("/messages/new")}>
-                    Write to us
-                  </LiquidButton>
-                </div>
-              ) : (
-                <ul>
-                  {data.messages.map((m) => (
-                    <li key={m.id} style={{ borderColor: "var(--line)" }} className="border-b last:border-b-0">
-                      <Link to={`/messages/${m.id}`} className="flex gap-2.5 px-5 py-3.5 text-left">
-                        <span
-                          aria-hidden
-                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: m.unread ? "var(--green-ink)" : "transparent" }}
-                        />
-                        <span className="min-w-0">
-                          <span className="flex items-baseline gap-2">
-                            <span className="truncate text-[12px] font-semibold">{m.subject}</span>
-                            <span className="shrink-0 text-[11px] text-ink-faint">{sinceNow(m.at)}</span>
-                          </span>
-                          <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-ink-soft">
-                            {m.fromStaff ? "" : "You: "}
-                            {m.preview}
-                          </span>
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+      {/* ── THE COMMIT ROW ───────────────────────────────────────────────────
+          "Repay" used to navigate to a screen. Pay Now raises the M-PESA prompt
+          from here, which is the difference between telling somebody where to go
+          and letting them do it: every shilling on this book has previously
+          arrived because somebody was chased for it.
 
-            {/* Advice and tips. A lending app that only ever asks for things is
-                a lending app people close. */}
-            <section>
-              <div className="mb-2.5 flex items-baseline justify-between gap-3 px-1">
-                <h2 className="text-[15px] font-bold tracking-[-0.015em]">Advice and tips</h2>
-                <button className="text-[12.5px] font-semibold" style={{ color: "var(--green-ink)" }}>
-                  View all
-                </button>
-              </div>
+          It stays second to "Apply" only when there is nothing owed. With a live
+          balance, paying is the more useful act and the buttons swap emphasis —
+          the screen should lead with what this particular customer's position
+          calls for. */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        {data.outstanding > 0 ? (
+          <>
+            <LiquidButton icon={Smartphone} trailingIcon={ArrowRight} size="lg" block onClick={() => setPaying(true)}>
+              Pay now
+            </LiquidButton>
+            <LiquidButton variant="metal" size="lg" block onClick={() => go("/join")}>
+              Apply for a loan
+            </LiquidButton>
+          </>
+        ) : (
+          <>
+            <LiquidButton icon={Banknote} trailingIcon={ArrowRight} size="lg" block onClick={() => go("/join")}>
+              Apply for a loan
+            </LiquidButton>
+            <LiquidButton variant="metal" icon={Smartphone} size="lg" block onClick={() => setPaying(true)}>
+              Pay now
+            </LiquidButton>
+          </>
+        )}
+      </div>
+    </section>
+  );
 
-              {/* A scrolling row on a phone — bleeding to the edge, so a clipped
-                  card is the affordance. A plain stack on a desktop, where the
-                  column has the height and horizontal scrolling is a nuisance. */}
-              <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] xl:mx-0 xl:flex-col xl:overflow-visible xl:px-0 [&::-webkit-scrollbar]:hidden">
-                {TIPS.map((t) => (
-                  <article
-                    key={t.slot}
-                    className="card w-[228px] shrink-0 snap-start overflow-hidden xl:flex xl:w-auto xl:shrink"
-                  >
-                    <Artwork
-                      slot={t.slot}
-                      motif={t.motif}
-                      rounded="rounded-none"
-                      className="xl:h-full xl:w-[104px] xl:shrink-0"
-                    />
-                    <div className="p-3.5">
-                      <h3 className="text-[13.5px] font-semibold leading-tight">{t.title}</h3>
-                      <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{t.body}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </aside>
+  // ── THE REASON, DIRECTLY UNDER THE NUMBER ────────────────────────────────
+  // This strip was at the bottom of a long column. It is the app's commitment —
+  // the footer promises every decision on this screen can be explained, and this
+  // is where that promise is kept — so it now sits on the first pane, one line
+  // below the limit it is explaining. Number, then why.
+  const whyLimit = (
+    <Link to="/score" className="card flex w-full items-center gap-3 p-4 text-left">
+      <span
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+        style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
+      >
+        <Gauge className="h-[18px] w-[18px]" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-semibold leading-tight">
+          {data.limit > 0 ? `Why your limit is ${kes(data.limit)}` : "How your limit is set"}
+        </span>
+        <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
+          The four things that moved your score, in plain language.
+        </span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
+    </Link>
+  );
+
+  // ── THE TWO THINGS THAT OUTRANK EVERYTHING ELSE ──────────────────────────
+  // An unverified ID and an application mid-workflow are both states where the
+  // customer's next action is NOT "apply for a loan" — and leaving the apply
+  // button as the loudest thing on the screen sends them into a funnel that will
+  // refuse them at the end.
+  //
+  // They are on PANE ONE for the same reason they were at the top of the column:
+  // a blocker a customer has to go looking for is not a blocker, it is a
+  // surprise ninety seconds later.
+  const prompts = (
+    <>
+      {data.kycStatus !== "VERIFIED" && data.kycStatus !== "NONE" && (
+        <Link to="/identity" className="card flex w-full items-center gap-3 p-4 text-left">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: "color-mix(in oklab, #818cf8 18%, transparent)", color: "#4f46e5" }}
+          >
+            <ScanFace className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold leading-tight">
+              {data.kycStatus === "PENDING_REVIEW" ? "Your ID is with our team" : "Finish verifying your ID"}
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
+              {data.kycStatus === "PENDING_REVIEW"
+                ? "A person is checking it. We will message you the moment it clears."
+                : "You cannot borrow until this is done. It takes about a minute."}
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
+        </Link>
+      )}
+
+      {data.application && (
+        <Link to="/track" className="card flex w-full items-center gap-3 p-4 text-left">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: "color-mix(in oklab, var(--lime) 22%, transparent)", color: "var(--green-ink)" }}
+          >
+            <RouteIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold leading-tight">
+              {kes(data.application.amount)} on {data.application.product ?? "your application"}
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
+              {data.application.stageTitle
+                ? `With ${data.application.stageTitle} — follow it through every stage.`
+                : "In progress — follow it through every stage."}
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
+        </Link>
+      )}
+    </>
+  );
+
+  // ── THE SHORTCUTS ─────────────────────────────────────────────────────────
+  // Two up on a phone, where a tile has to be a thumb target and the page has
+  // all the height it wants. FOUR ACROSS on a laptop, stacked icon-over-label,
+  // because the landscape frame has width to spend and height it does not: the
+  // 2×2 grid was 176px tall and was the thing that pushed this pane over the
+  // fold, which on a screen whose whole promise is "nothing is below the fold"
+  // is the one failure that matters.
+  const actions = (
+    <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {ACTIONS.map((a) => (
+        <Link
+          key={a.label}
+          to={a.to}
+          className="card group flex items-start gap-3 p-4 text-left transition-transform duration-200 active:scale-[0.985] lg:flex-col lg:gap-2 lg:p-3.5"
+        >
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: `color-mix(in oklab, ${a.tint} 16%, transparent)`, color: a.tint }}
+          >
+            <a.icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold leading-tight">{a.label}</span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">{a.note}</span>
+          </span>
+        </Link>
+      ))}
+    </section>
+  );
+
+  // ── THE SCORE, IN FULL ────────────────────────────────────────────────────
+  // The chip on pane 1 is the figure; this is the figure with its reasons. It
+  // renders ONLY when there is a score — a customer who has not been scored has
+  // no score, which is different from a bad one, and a gauge sitting at zero
+  // says the second.
+  const scoreCard = data.score != null && (
+    <Link to="/score" className="card block p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Your credit score</p>
+          <p className="mt-1 flex items-baseline gap-1.5">
+            <span className="tnum text-[34px] font-bold leading-none tracking-[-0.03em]" style={{ color: tone.ink }}>
+              {data.score}
+            </span>
+            <span className="text-[14px] font-semibold text-ink-faint">/ {data.scoreMax}</span>
+          </p>
+          {/* The band lives HERE now, beside the drivers that produced it,
+              rather than beside the limit where it read as a verdict. */}
+          {data.band && <p className="mt-1.5 text-[12px] text-ink-soft">{data.band}</p>}
         </div>
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-faint" />
+      </div>
 
-        <p className="px-5 pb-2 pt-4 text-center text-[11px] leading-relaxed text-ink-faint">
-          Micro Eazy is a technology platform. Your loan is funded by a licensed lender, and every decision on this
-          screen can be explained to you on request.
-        </p>
+      {/* The scale starts at 300, not 0 — a 584 drawn on a 0–900 bar reads as
+          two thirds of the way along, and on the scale the number actually lives
+          on it is closer to a half. Drawing it against the wrong floor flatters
+          every customer. */}
+      <div className="mt-4 h-2.5 overflow-hidden rounded-full" style={{ background: "var(--surface-sunk)" }}>
+        <div
+          className="h-full rounded-full transition-[width] duration-700"
+          style={{
+            width: `${Math.min(100, Math.max(2, ((data.score - 300) / (data.scoreMax - 300)) * 100))}%`,
+            background: tone.fill,
+          }}
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[10.5px] text-ink-faint">
+        <span className="tnum">300</span>
+        <span className="tnum">{data.scoreMax}</span>
+      </div>
+
+      {/* What moved it. The footer of this app promises that every decision on
+          this screen can be explained on request — this is that promise kept
+          where the number is, rather than in a call. */}
+      {data.scoreDrivers.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t pt-3" style={{ borderColor: "var(--line)" }}>
+          {data.scoreDrivers.slice(0, 4).map((d) => (
+            <li key={d.factor} className="flex items-center gap-2 text-[11.5px] leading-snug text-ink-soft">
+              <span
+                aria-hidden
+                className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold"
+                style={{
+                  background:
+                    d.direction === "reduces"
+                      ? "color-mix(in oklab, var(--green) 20%, transparent)"
+                      : "color-mix(in oklab, #f59e0b 22%, transparent)",
+                  color: d.direction === "reduces" ? "var(--green-ink)" : "#b45309",
+                }}
+              >
+                {d.direction === "reduces" ? "↑" : "↓"}
+              </span>
+              <span className="min-w-0 truncate">{d.factor}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Link>
+  );
+
+  // ── THE SCHEDULE ──────────────────────────────────────────────────────────
+  // Every collections call centre in Kenya exists largely to answer "how much do
+  // I still owe and when is the next one" down a phone. It is not a hard
+  // question. It has simply never been on the customer's own screen — so putting
+  // it here removes calls rather than deflecting them, which is a different and
+  // better thing.
+  //
+  // Rendered only when there IS one. A bridged lender's loan feed carries no
+  // instalment breakdown, so an empty table under the heading "Your schedule"
+  // would read as a loan with no repayments due — the opposite of the truth.
+  // Silence is the honest state.
+  const schedule = data.schedule.length > 0 && (
+    <section className="card overflow-hidden">
+      <div className="flex items-center gap-2.5 border-b px-5 py-3.5" style={{ borderColor: "var(--line)" }}>
+        <p className="flex-1 text-[13px] font-semibold">Your schedule</p>
+        <span className="tnum text-[11.5px] text-ink-faint">
+          {data.schedule.filter((s) => s.status === "PAID").length} of {data.schedule.length} paid
+        </span>
+        <Link to="/repay" className="text-[12px] font-semibold" style={{ color: "var(--green-ink)" }}>
+          See all
+        </Link>
+      </div>
+
+      <ul>
+        {data.schedule.slice(0, 4).map((s, i, rows) => {
+          const paid = s.status === "PAID";
+          // "Next" is the first row that is not yet paid — a position, not a
+          // status the server sends. Deriving it here means the highlight cannot
+          // disagree with the list it sits in.
+          const next = !paid && rows.slice(0, i).every((r) => r.status === "PAID");
+          return (
+            <li
+              key={s.seq}
+              className="flex items-center gap-3 border-b px-5 py-2.5 last:border-b-0"
+              style={{
+                borderColor: "var(--line)",
+                background: next ? "color-mix(in oklab, var(--lime) 9%, transparent)" : undefined,
+              }}
+            >
+              <span
+                className="tnum grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[12px] font-bold"
+                style={{
+                  background: paid ? "color-mix(in oklab, var(--green) 18%, transparent)" : "var(--surface-sunk)",
+                  color: paid ? "var(--green-ink)" : "var(--ink-faint)",
+                }}
+              >
+                {paid ? "✓" : s.seq}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-medium leading-tight">{shortDate(s.due)}</span>
+                <span className="mt-0.5 block text-[11.5px] text-ink-faint">
+                  {paid ? "Paid" : s.status === "OVERDUE" ? "Overdue" : next ? "Next" : "Scheduled"}
+                </span>
+              </span>
+              <span
+                className="tnum shrink-0 text-[13.5px] font-semibold"
+                style={{ color: paid ? "var(--ink-faint)" : "var(--ink)" }}
+              >
+                {kes(s.amount)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+
+  // ── WHAT IS NEXT ──────────────────────────────────────────────────────────
+  // The single most asked question in any collections call centre, answered
+  // before anybody has to ring.
+  const nextPayment = (
+    <section className="card p-5">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+          style={{ background: "color-mix(in oklab, #5b8cff 16%, transparent)", color: "#3f6fd8" }}
+        >
+          <CalendarClock className="h-[18px] w-[18px]" strokeWidth={2.2} />
+        </span>
+        <p className="text-[13px] font-semibold">Your next payment</p>
+      </div>
+
+      {loan?.nextDue ? (
+        <>
+          <p className="tnum mt-3 text-[26px] font-bold leading-none tracking-[-0.02em]">{kes(loan.nextDue.amount)}</p>
+          <p className="mt-1 text-[12px] text-ink-soft">due {shortDate(loan.nextDue.date)}</p>
+          <LiquidButton size="sm" block className="mt-3" onClick={() => go("/repay")}>
+            Repay now
+          </LiquidButton>
+        </>
+      ) : loan ? (
+        // A loan whose instalment breakdown we do not hold. Saying the BALANCE
+        // is honest; inventing a "next payment" from it would put a date and a
+        // figure on screen that the lender never quoted — and it is precisely
+        // the figure a customer would then pay.
+        <>
+          <p className="tnum mt-3 text-[26px] font-bold leading-none tracking-[-0.02em]">{kes(loan.balance)}</p>
+          <p className="mt-1 text-[12px] text-ink-soft">outstanding on {loan.product ?? "your loan"}</p>
+          <p className="mt-3 text-[11.5px] leading-snug text-ink-faint">
+            Your lender holds the instalment dates for this loan. Open Repay to pay any amount towards it.
+          </p>
+          <LiquidButton size="sm" block className="mt-3" onClick={() => go("/repay")}>
+            Repay
+          </LiquidButton>
+        </>
+      ) : (
+        <>
+          <p className="mt-3 text-[13px] font-semibold">Nothing due</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
+            You have no running loan. When you take one, the next payment appears here.
+          </p>
+        </>
+      )}
+    </section>
+  );
+
+  // ── REAL CONVERSATIONS, NOT A BROADCAST ───────────────────────────────────
+  // This panel used to render two invented messages from "Micromart Fintech". It
+  // shows the customer's own threads — the ones an officer is actually answering
+  // — so tapping a row opens the reply rather than a dead notification. A channel
+  // used for marketing stops being read, and then the message that mattered goes
+  // unread with it, which is why nothing but real correspondence is here.
+  const messages = (
+    <section className="card overflow-hidden">
+      <div className="flex items-center gap-2.5 border-b px-5 py-3.5" style={{ borderColor: "var(--line)" }}>
+        <MessageSquareText className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2.1} />
+        <p className="flex-1 text-[13px] font-semibold">Messages</p>
+        {data.unreadMessages > 0 && (
+          <span
+            className="rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+            style={{ background: "color-mix(in oklab, var(--lime) 24%, transparent)", color: "var(--green-ink)" }}
+          >
+            {data.unreadMessages} new
+          </span>
+        )}
+      </div>
+
+      {data.messages.length === 0 ? (
+        <div className="px-5 py-5">
+          <p className="text-[12.5px] leading-relaxed text-ink-faint">
+            Nothing yet. If anything about your account or an application is unclear, write to us and a real person
+            answers.
+          </p>
+          <LiquidButton size="sm" variant="metal" block className="mt-3" onClick={() => go("/messages/new")}>
+            Write to us
+          </LiquidButton>
+        </div>
+      ) : (
+        <ul>
+          {data.messages.slice(0, 3).map((m) => (
+            <li key={m.id} style={{ borderColor: "var(--line)" }} className="border-b last:border-b-0">
+              <Link to={`/messages/${m.id}`} className="flex gap-2.5 px-5 py-3 text-left">
+                <span
+                  aria-hidden
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: m.unread ? "var(--green-ink)" : "transparent" }}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-baseline gap-2">
+                    <span className="truncate text-[12px] font-semibold">{m.subject}</span>
+                    <span className="shrink-0 text-[11px] text-ink-faint">{sinceNow(m.at)}</span>
+                  </span>
+                  <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-ink-soft">
+                    {m.fromStaff ? "" : "You: "}
+                    {m.preview}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
+  // ── ADVICE AND TIPS ───────────────────────────────────────────────────────
+  // A lending app that only ever asks for things is a lending app people close.
+  //
+  // On a phone this is a row that bleeds off the edge, so a clipped card is the
+  // affordance to swipe it. On a laptop the cards turn on their side — artwork
+  // as a left strip, copy beside it — and stack down the second pane's right
+  // column, which is the shape that reads as a reading list rather than as three
+  // more things to do.
+  const tips = (
+    <section>
+      {/* ── THE HEADING IS PHONE-ONLY, FOR TWO REASONS ─────────────────────
+          The first is structural. Every column on every pane starts UNDER the
+          Sky's overlap — the cards are opaque and ride on it, which is the whole
+          trick (see the note on `relative z-10` at the foot of this file). Bare
+          type has no surface to do that with, so this heading was sitting in
+          navy-on-navy at the top of the second pane's right column.
+
+          The second is that "View all" has never been wired to anything. On a
+          phone the heading still earns its place: the tips are a row that bleeds
+          off the screen edge and needs naming. On a laptop they are three
+          labelled cards in a column and name themselves, so this is a dead
+          control and a redundant label taking 34px of a fixed height budget. */}
+      <div className="mb-2.5 flex items-baseline justify-between gap-3 px-1 lg:hidden">
+        <h2 className="text-[15px] font-bold tracking-[-0.015em]">Advice and tips</h2>
+        <button className="text-[12.5px] font-semibold" style={{ color: "var(--green-ink)" }}>
+          View all
+        </button>
+      </div>
+
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
+        {TIPS.map((t) => (
+          <article
+            key={t.slot}
+            className="card w-[228px] shrink-0 snap-start overflow-hidden lg:flex lg:w-auto lg:shrink"
+          >
+            <Artwork
+              slot={t.slot}
+              motif={t.motif}
+              rounded="rounded-none"
+              className="lg:h-full lg:w-[104px] lg:shrink-0"
+            />
+            <div className="p-3.5">
+              <h3 className="text-[13.5px] font-semibold leading-tight">{t.title}</h3>
+              <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{t.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+
+  // ── THE TWO PANES ─────────────────────────────────────────────────────────
+  // Two, not three. The first cut of this was three thinner panes and the middle
+  // one was half empty — which is the failure mode of a fixed frame: whitespace
+  // that reads as content still loading rather than as composition. A pane
+  // should be FULL, because the whole argument for going sideways is that the
+  // rectangle is always worth looking at.
+  //
+  // The labels are two words because they are read on a pill in the footer bar.
+  // They answer "what is over there", they do not describe it.
+  //
+  // ── WHY THE FIRST PANE IS IN THIS ORDER ─────────────────────────────────
+  // Money, then the reason for it, then anything blocking. The number leads
+  // because it is why the app was opened; "Why your limit is KSh 45,000" sits
+  // DIRECTLY under it, because a figure and its explanation separated by two
+  // cards is a figure with no explanation. The prompts follow rather than lead —
+  // an unverified ID needs to be unmissable, and immediately under the balance
+  // on a pane that never scrolls is unmissable.
+  //
+  // A pane has a HEIGHT BUDGET, and everything in it has to earn a share. The
+  // shortcuts very nearly did not: as a 2×2 grid they were 176px and pushed this
+  // pane past the fold on a 900px window. Turned four-across they are 120px and
+  // they fit — see the note on `actions` above. That arithmetic is the real
+  // constraint of a fixed frame, and it is a better editor than any amount of
+  // discussion about what is important.
+  const panes: Pane[] = [
+    {
+      id: "money",
+      label: "Your money",
+      node: (
+        <PaneGrid
+          left={
+            <>
+              {money}
+              {whyLimit}
+              {prompts}
+              {actions}
+            </>
+          }
+          right={
+            <>
+              {nextPayment}
+              {messages}
+            </>
+          }
+        />
+      ),
+    },
+    {
+      id: "standing",
+      label: "Your standing",
+      node: (
+        <PaneGrid
+          left={
+            <>
+              {scoreCard}
+              {schedule}
+            </>
+          }
+          right={tips}
+        />
+      ),
+    },
+  ];
+
+  return (
+    // The column the deck stands in. `lg:h-full` and `min-h-0` are what let the
+    // deck below measure itself against the shell's fixed content box rather
+    // than against its own content — without them the track has no height to
+    // fill and every pane collapses to nothing.
+    <div className="flex flex-col lg:h-full lg:min-h-0">
+      <div className="shrink-0">
+        <Sky title={data.firstName ? `Hello, ${data.firstName}` : "Hello"}>
+          <p className="max-w-[34ch] text-[13px] leading-relaxed text-sky-ink-soft">
+            Your limit is reviewed every time you repay. Nothing here is decided by a person.
+          </p>
+        </Sky>
+      </div>
+
+      {/* `relative z-10` is load-bearing, not tidiness. The Sky is a positioned
+          element, so it paints ABOVE any static sibling regardless of DOM order —
+          which meant the header covered the top of the first card and swallowed
+          both the label and the score chip. Only visible in the light theme,
+          because in the dark one the card is translucent and it read as a tint. */}
+      <div className="relative z-10 -mt-12 flex min-h-0 flex-1 flex-col px-4">
+        <ChannelBadge />
+        <Deck panes={panes} label="Home" />
       </div>
 
       {/* ── PAY NOW ─────────────────────────────────────────────────────────
@@ -685,6 +866,6 @@ export default function Home({
         phone={phoneMasked}
         onPushed={onRefresh}
       />
-    </>
+    </div>
   );
 }
