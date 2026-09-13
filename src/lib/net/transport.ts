@@ -150,7 +150,62 @@ export interface ApiOptions {
   signal?: AbortSignal;
 }
 
-const DEFAULT_TIMEOUT = 12_000;
+// ── THE TIMEOUT, AND WHY 12s WAS TOO SHORT FOR THE SCREEN THAT MATTERS ──────
+// This was 12s for everything, and it produced the bug that made Home unusable:
+// /api/portal/home is an AGGREGATE. For a bridged lender it fans out across the
+// suite into Micromart's own SQL Server — balance, limit, savings, schedule,
+// application stage, messages — and a cold one of those over the bridge is
+// regularly slower than twelve seconds. /api/portal/messages is a single
+// indexed read and comes back instantly, which is exactly why messages worked
+// while Home did not, and why Home "started working" once the server was warm.
+//
+// So the default rises, and the heavy reads get their own budget. This is not
+// papering over a slow server: it is admitting that a first-load aggregate
+// across a bridge into somebody else's database has a different distribution
+// from a keyed lookup, and giving it a limit drawn from that distribution
+// rather than from the other one.
+const DEFAULT_TIMEOUT = 20_000;
+
+/** For the fan-out reads — see above. Callers pass `timeoutMs: SLOW_TIMEOUT`. */
+export const SLOW_TIMEOUT = 45_000;
+
+/**
+ * ── NEVER SHOW A DOMException TO A CUSTOMER ─────────────────────────────────
+ * When the controller above fires, `fetch` rejects with a DOMException whose
+ * message is the string "signal is aborted without reason". That error was
+ * rethrown raw, and screens/components render `err.message` — so a borrower
+ * who opened the app to check their balance was shown, verbatim:
+ *
+ *     We could not load this
+ *     signal is aborted without reason
+ *
+ * It is the single worst error text in the app: it is frightening, it is
+ * meaningless, it names no action, and it appears on the screen the product is
+ * judged on. The condition it describes — "the lender's system did not answer
+ * in time" — is an ordinary and explainable thing.
+ *
+ * `cause` is preserved so the real DOMException is still there for anyone
+ * reading a console or a breadcrumb; only what a person SEES is translated.
+ */
+function isAbort(err: unknown): boolean {
+  return (
+    (err instanceof DOMException && err.name === "AbortError") ||
+    (err instanceof Error && err.name === "AbortError")
+  );
+}
+
+function humanise(err: unknown, timedOutAfterMs: number): Error {
+  if (isAbort(err)) {
+    const seconds = Math.round(timedOutAfterMs / 1000);
+    return new ApiError(
+      `Your lender's system did not answer within ${seconds} seconds. Nothing has changed on your account — please try again.`,
+      0,
+      null,
+    );
+  }
+  if (err instanceof Error) return err;
+  return new ApiError("Could not reach the lender. Check your connection and try again.", 0, null);
+}
 
 /** Gateway-level failures — the road is broken. An application 500 is NOT here:
  *  that is the far end answering, and asking a second host the same question
@@ -199,14 +254,24 @@ export async function apiFetch<T = unknown>(
   }
 
   const canRetry = mayRetry(method, opts);
+  const budget = opts.timeoutMs ?? DEFAULT_TIMEOUT;
   let lastErr: unknown = null;
 
   for (let i = 0; i < channels.length; i++) {
     const ch = channels[i];
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT);
+    // Which of the two things aborted this attempt. Without it, a caller that
+    // cancelled deliberately (a screen unmounting) is indistinguishable from a
+    // lender that timed out, and one of those deserves an error message while
+    // the other deserves silence.
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, budget);
     // Honour a caller's own cancellation without losing our timeout.
-    opts.signal?.addEventListener("abort", () => controller.abort(), { once: true });
+    const onCallerAbort = () => controller.abort();
+    opts.signal?.addEventListener("abort", onCallerAbort, { once: true });
 
     try {
       const headers = new Headers(init.headers);
@@ -251,7 +316,15 @@ export async function apiFetch<T = unknown>(
       // broken road and do not try the other one.
       if (err instanceof ApiError && !ROAD_FAILURE.has(err.status)) throw err;
 
-      lastErr = err;
+      // The CALLER cancelled — a screen unmounted, a customer navigated away.
+      // That is not a failure and it is certainly not something to report, or
+      // to mark a road degraded over. Rethrow untouched so an awaiting effect
+      // can see the AbortError and ignore it.
+      if (isAbort(err) && !timedOut) throw err;
+
+      // Our own timer fired. Translate it here rather than at the end, so the
+      // message names the budget that was actually exceeded on THIS road.
+      lastErr = timedOut ? humanise(err, budget) : err;
       publish({
         degraded: state.degraded.includes(ch.id) ? state.degraded : [...state.degraded, ch.id],
         lastError: err instanceof Error ? err.message : "Network error",
@@ -263,12 +336,17 @@ export async function apiFetch<T = unknown>(
       if (!canRetry) break;
     } finally {
       clearTimeout(timer);
+      // The listener was added with `once`, but `once` only removes it when it
+      // FIRES. On every successful call it stays attached to a signal the
+      // caller may reuse, and a long-lived signal therefore accumulates one
+      // dead closure per request — each holding a controller alive.
+      opts.signal?.removeEventListener("abort", onCallerAbort);
     }
   }
 
-  throw lastErr instanceof Error
-    ? lastErr
-    : new ApiError("Could not reach the lender. Check your connection and try again.", 0, null);
+  // Belt and braces: anything that reaches here unhumanised still must not
+  // arrive at a screen as a DOMException.
+  throw humanise(lastErr, budget);
 }
 
 function safeJson(text: string): unknown {

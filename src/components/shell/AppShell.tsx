@@ -61,6 +61,7 @@ import { Bell, Menu, X } from "lucide-react";
 import { NAV_GROUPS } from "../nav/GlowNav";
 import { PagerSlotContext } from "./chrome";
 import { ScrollVeil, useCutOff } from "./ScrollVeil";
+import { useLender } from "../../lib/lender";
 import { ThemeToggle } from "./ThemeToggle";
 import { IdentityMenu } from "./IdentityMenu";
 
@@ -69,7 +70,16 @@ import { IdentityMenu } from "./IdentityMenu";
 const DISCLOSURE =
   "Micro Eazy is a technology platform. Your loan is funded by a licensed lender, and every decision on this screen can be explained to you on request.";
 
+/**
+ * The nav registry says Home is `/`. For a signed-in customer home is their
+ * lender's, `/<slug>` — and linking to `/` would work (it redirects) but would
+ * never light up as active, because the customer is never actually standing on
+ * `/`. So the one link is resolved here, where the lender is known.
+ */
+const resolveTo = (to: string, slug: string) => (to === "/" ? `/${slug}` : to);
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const lender = useLender();
   return (
     // ── GROUPED, BECAUSE TEN FLAT LINKS IS A LIST AND NOT A MAP ─────────────
     // The sidebar now carries the whole app rather than the five that fit a
@@ -87,7 +97,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             return (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={resolveTo(item.to, lender.slug)}
                 end={item.to === "/"}
                 onClick={onNavigate}
                 className={({ isActive }) =>
@@ -95,9 +105,10 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
                     isActive ? "text-white shadow-sm" : "text-ink-soft hover:bg-surface-sunk hover:text-ink"
                   }`
                 }
-                // The active fill is the brand, exactly as the console does it —
-                // one saturated bar in a column of quiet type.
-                style={({ isActive }) => (isActive ? { backgroundColor: "var(--navy)" } : undefined)}
+                // The active fill is the LENDER'S brand, exactly as the console
+                // does it with --brand — one saturated bar in a column of quiet
+                // type, in the colour their own staff see.
+                style={({ isActive }) => (isActive ? { backgroundColor: "var(--brand)" } : undefined)}
               >
                 {({ isActive }) => (
                   <>
@@ -120,47 +131,44 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 
 /**
  * ── THE LETTERHEAD ──────────────────────────────────────────────────────────
- * The mark at the head of its own navigation, drawn the way the lender console
- * draws a lender's: a white card running to the rail's own gutters, with the
- * artwork given the FULL WIDTH of that card and centred inside it.
+ * The LENDER'S mark at the head of their customers' navigation, drawn the way
+ * the LMS console draws it at the head of their staff's: a white card running to
+ * the rail's own gutters, the artwork given the whole of it.
  *
- * What it replaces was a ~62px plate floating in the middle of a 236px column.
- * At that size, with that much air on either side, it read as a sticker somebody
- * had put on the sidebar rather than as the masthead of the page — the same
- * failure the wordmark-beside-a-favicon arrangement had before it, arrived at
- * from the opposite direction.
+ * It is the same FILE the console shows, not a lookalike. `lender.mark` for
+ * Micromart is byte-for-byte the `Org.logoUrl` in the LMS brand bucket, so an
+ * officer and a borrower looking at their two screens side by side see one
+ * object in one corner. That is the claim this whole rebrand exists to make
+ * true: the branding a lender sets on the LMS is the branding their customers
+ * get.
  *
- * ── THE FILE ────────────────────────────────────────────────────────────────
- * `/brand/micro-eazy/logo-lockup.png` is the full lockup — mark, name and
- * strapline — trimmed to its own alpha bounds, so the card's padding is the
- * card's and not the PNG's. The untrimmed original carries 27% dead width and
- * 52% dead height; given `w-full` it would have drawn a small logo in the middle
- * of a large white rectangle, which is precisely the look being fixed here.
- *
- * The card stays WHITE in both themes. The artwork is navy and green on
- * transparency, and on a near-black ground its navy half disappears — the same
- * rule .brand-chip and .brand-plate already follow.
+ * The card stays white in both themes — lender marks carry dark tones that
+ * disappear on the dark theme's ground, which is the rule .letterhead follows.
  */
 function BrandBlock({ onNavigate }: { onNavigate?: () => void }) {
+  const lender = useLender();
   return (
     <NavLink
-      to="/"
+      to={`/${lender.slug}`}
       onClick={onNavigate}
-      // The visible artwork carries the name, so the accessible name lives here
-      // rather than in grey type nobody reads. A screen reader announced "Micro
-      // Eazy Quick loans. Better living. home" when it was set three ways.
-      aria-label="Micro Eazy — home"
+      aria-label={`${lender.name} — home`}
       className="mx-2.5 mb-2.5 mt-2.5 block shrink-0"
     >
-      <span className="letterhead w-full px-3.5 py-3">
+      <span className="letterhead h-[96px] w-full px-4 py-3">
         <img
-          src="/brand/micro-eazy/logo-lockup.png"
+          src={lender.mark}
           alt=""
           aria-hidden="true"
-          // `w-full object-contain` is the console's rule verbatim: it absorbs
-          // whatever aspect ratio the artwork has without us needing to know the
-          // file's dimensions, so replacing the file never distorts it.
-          className="h-auto w-full object-contain"
+          draggable={false}
+          // `object-contain` in a fixed box is the console's rule: it absorbs a
+          // square mark and a wide wordmark alike, so the next lender's file
+          // drops in without anybody measuring it.
+          //
+          // An EXPLICIT 72px, not `h-full`. The card is a grid with an
+          // auto-sized row, so a percentage height on the image has nothing
+          // definite to resolve against — `h-full` fell back to the file's
+          // intrinsic height and the overflow clipped the mark to its bottom half.
+          className="h-[72px] w-full object-contain"
         />
       </span>
     </NavLink>
@@ -208,32 +216,42 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     // ── THE FRAME ─────────────────────────────────────────────────────────
-    // `lg:h-screen lg:overflow-hidden` is the landscape rule in two utilities.
-    // Everything below it is written to live inside a box of known height —
-    // `min-h-0` on every flex child, because a flex item's default `min-height:
-    // auto` refuses to shrink below its content and would push the footer off
-    // the bottom of the window rather than making the content box smaller.
-    <div className="min-h-screen lg:h-screen lg:min-h-0 lg:overflow-hidden">
+    // A column of two rows above `lg`: the WORK AREA, which takes every pixel
+    // of height it can, and the LEGAL BAR, which takes exactly its own. The
+    // whole thing is `h-screen overflow-hidden` — the landscape rule in two
+    // utilities — and every flex child below carries `min-h-0`, because a flex
+    // item's default `min-height: auto` refuses to shrink below its content and
+    // would push the footer off the bottom of the window instead of making the
+    // content box smaller.
+    //
+    // Below `lg` it is ordinary flow: the page scrolls, the footer is the last
+    // thing in it, and the bottom padding clears the fixed tab bar.
+    <div className="lender-app flex min-h-screen flex-col pb-24 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:pb-0">
       {/* The gap IS the design — chrome and page float apart, ground between. */}
-      <div className="flex min-h-screen gap-3 px-3 pb-6 pt-3 sm:gap-5 sm:px-5 lg:h-full lg:min-h-0 lg:gap-5 lg:px-5 lg:pb-4">
-        <aside className="card hidden w-[236px] shrink-0 flex-col overflow-hidden rounded-2xl lg:flex lg:h-full">
+      <div className="flex min-h-0 flex-1 gap-3 px-3 pt-3 sm:gap-5 sm:px-5 lg:gap-5 lg:px-5">
+        {/* ── THE RAIL IS AS TALL AS WHAT IS IN IT ─────────────────────────
+            It used to run the full height of the window. With ten destinations
+            that left a white slab with its bottom third empty — a panel whose
+            size said "there is more here" about a list that had already ended.
+
+            `self-start` sizes it to its content. `lg:max-h-full` plus the inner
+            scroll is the safety valve for a short window, where the list does
+            not fit and the rail is the one place a scroll is still allowed:
+            it is navigation, not content, and its group headings make the
+            shape of the list visible from the first row. */}
+        <aside className="card hidden max-h-full w-[236px] shrink-0 flex-col self-start overflow-hidden rounded-2xl lg:flex">
           <BrandBlock />
           {/* A hairline under the letterhead. Without it the card floats above
               the list and reads as the first (oversized) nav row rather than as
               the head of the page. */}
           <div className="mx-4 mb-3 border-t" style={{ borderColor: "var(--line)" }} />
-          {/* The rail is the ONE place a scrollbar is still allowed, and only
-              when the ten destinations genuinely do not fit the window. It is
-              navigation, not content: nothing here is hidden from a customer who
-              never scrolls, because the group headings make the shape of the
-              list visible from the first row. */}
-          <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+          <div className="min-h-0 overflow-y-auto pb-3">
             <NavItems />
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col lg:h-full lg:min-h-0">
-          <div className="mb-3 flex h-10 shrink-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 flex-col lg:min-h-0">
+          <div className="mb-3 flex h-10 shrink-0 items-center justify-between gap-2 lg:mb-2">
             {/* The drawer button. Mobile only — on a laptop the rail is already
                 standing and a button to reveal it would open nothing. */}
             <button
@@ -270,43 +288,48 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="mx-auto flex w-full min-w-0 max-w-[1080px] flex-1 flex-col lg:min-h-0">
             <PagerSlotContext.Provider value={pagerSlot}>
               {/* ── THE CONTENT BOX ────────────────────────────────────────
-                  `relative` for the veil. `overflow-y-auto` and NOT
-                  `overflow-hidden`: a screen that has not been cut into panes
-                  yet is taller than this box, and clipping it would put its
-                  content somewhere no scroll and no keyboard could reach. It
-                  scrolls here instead, with the bar hidden, while the rail and
-                  the legal bar stay exactly where they are.
-
-                  A deck never reaches this: it sizes itself to exactly this box
-                  (`lg:h-full`) and clips its own track inside .deck-viewport, so
-                  the sideways track cannot widen the page either.
-
-                  `pb-28` on a handset clears the bottom tab bar. */}
+                  `overflow-y-auto` and NOT `overflow-hidden`: a screen that has
+                  not been cut into panes yet is taller than this box, and
+                  clipping it would put its content somewhere no scroll and no
+                  keyboard could reach. It scrolls here, bar hidden, while the
+                  rail and the legal bar stay exactly where they are. A deck
+                  never reaches this — it sizes itself to exactly this box and
+                  clips its own track inside .deck-viewport. */}
               <main
                 ref={setMainEl}
-                className="relative min-h-0 flex-1 pb-28 lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden"
+                className="relative min-h-0 flex-1 pb-4 lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden"
               >
                 {children}
-                {/* Only when there is genuinely something below the fold — see
-                    the note in ScrollVeil about why an always-on gradient reads
-                    as a rendering seam on the screens that fit. */}
                 <ScrollVeil show={mainCutOff} />
               </main>
             </PagerSlotContext.Provider>
 
-            {/* ── THE LEGAL BAR ────────────────────────────────────────────
-                The disclosure on the left, the current screen's pager on the
-                right, on one solid strip at the foot of the frame. On a handset
-                it is the last thing in the scroll, clear of the tab bar. */}
-            <footer className="legal-bar mb-24 mt-3 flex shrink-0 items-center gap-4 px-4 py-2.5 lg:mb-0">
-              <p className="min-w-0 flex-1 text-[10.5px] leading-[1.4] text-ink-faint">{DISCLOSURE}</p>
-              {/* The slot. Empty on a screen with one pane, which is the right
-                  amount of chrome for a screen with nowhere to go. */}
-              <div ref={setPagerSlot} className="hidden shrink-0 lg:block" />
-            </footer>
+            {/* ── THE PAGER, ON TOP OF THE FOOTER, CENTRED ────────────────────
+                It lived inside the legal bar, sharing a strip with the
+                disclosure. Two different kinds of thing on one line — a sentence
+                a regulator reads and a control a customer presses — and on the
+                lender's solid band the control's page ink had nothing to sit on.
+
+                It now sits on its own, centred under the panes it pages, on the
+                page ground. `lg:empty:hidden` collapses the slot to nothing on a
+                screen with no deck, so a single-pane screen gets no gap for a
+                pager it does not have. */}
+            <div ref={setPagerSlot} className="hidden shrink-0 justify-center pb-1.5 pt-2 lg:flex lg:empty:hidden" />
           </div>
         </div>
       </div>
+
+      {/* ── THE LEGAL BAR, EDGE TO EDGE, IN THE LENDER'S COLOUR ─────────────
+          Outside the work area on purpose, so it runs from the far left of the
+          window to the far right — under the rail as well as the page. It is the
+          one line that closes every screen in the app, and a strip that stopped
+          at the rail's edge read as belonging to the content column only.
+
+          The lender's accent with white type: checked for every lender in
+          lib/lenders.ts, the worst case being Buy Simu's red at 5.28:1. */}
+      <footer className="legal-bar legal-bar--brand mt-3 shrink-0 px-5 py-2 lg:mt-1.5">
+        <p className="legal-ink mx-auto max-w-[1400px] text-center text-[11px] leading-[1.45]">{DISCLOSURE}</p>
+      </footer>
 
       {/* ── The drawer ───────────────────────────────────────────────────── */}
       {drawer && (

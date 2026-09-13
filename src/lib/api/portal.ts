@@ -27,7 +27,7 @@
 // that disagrees with its server is worse than no type at all, because it fails
 // silently and at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
-import { apiFetch } from "../net/transport";
+import { apiFetch, SLOW_TIMEOUT } from "../net/transport";
 import type { Product } from "../quote";
 
 // ── THE SLUG, AND WHY `??` WAS THE WRONG OPERATOR ───────────────────────────
@@ -40,13 +40,40 @@ import type { Product } from "../quote";
 //
 // `||` catches the empty string too, and .trim() catches the whitespace-only
 // value that a dashboard text field quietly produces. Both are needed: the bug
-// is not in the default, it is in which values reach it.
-/** Which lender's book this app is standing in. One build, many lenders. */
-export const LENDER_SLUG =
-  (import.meta.env.VITE_LENDER_SLUG ?? "").trim() || "micromart";
+// is not in the default, it is in which values reach it. Both survive below,
+// on ENV_SLUG, for exactly the same reason.
+//
+// ── AND WHY IT IS NO LONGER A CONSTANT AT ALL ───────────────────────────────
+// It was a build-time constant, which is correct for "one deployment per
+// lender" and wrong for what this app now is: ONE deployment, a chooser on the
+// front door, and a customer who picks their lender before a code is even sent.
+// A constant cannot express that, and threading the slug through ~20 call sites
+// as an argument would put it in the signature of functions that have no
+// business knowing about it.
+//
+// So the slug is a module-level value with a setter, and the env var is its
+// DEFAULT rather than its definition — a single-lender deployment still works
+// exactly as before by setting VITE_LENDER_SLUG and never calling the setter.
+//
+// lib/lender.tsx owns the customer-facing half of the same fact (the palette,
+// the marks, the name in the copy) and calls `setLenderSlug` here whenever it
+// changes, so there is exactly one place the two can disagree and it is that
+// one line.
+const ENV_SLUG = (import.meta.env.VITE_LENDER_SLUG ?? "").trim() || "micromart";
+
+let activeSlug = ENV_SLUG;
+
+/** Which lender's book this app is standing in, right now. */
+export const lenderSlug = (): string => activeSlug;
+
+/** Point every subsequent call at a different lender. Called by lib/lender.tsx;
+ *  nothing else should need it. */
+export function setApiLenderSlug(slug: string): void {
+  if (slug && slug.trim()) activeSlug = slug.trim();
+}
 
 /** Every /api/portal route takes the slug and the ID in the body. */
-const who = (nationalId: string) => JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId });
+const who = (nationalId: string) => JSON.stringify({ lenderSlug: lenderSlug(), nationalId });
 
 // ── Session ──────────────────────────────────────────────────────────────────
 
@@ -140,7 +167,7 @@ export interface OtpSent {
 export const sendOtp = (phone: string, lang?: "en" | "sw") =>
   apiFetch<OtpSent>(
     "/api/portal/otp",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, ...(lang ? { lang } : {}) }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), phone, ...(lang ? { lang } : {}) }) },
     // Safe to repeat: the server rate-limits, and a customer who did not get the
     // first SMS pressing "resend" is the expected case rather than an error.
     { auth: false, idempotent: true },
@@ -174,14 +201,14 @@ export interface OtpVerified {
 export const verifyOtp = (phone: string, code: string) =>
   apiFetch<OtpVerified>(
     "/api/portal/otp/verify",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, code }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), phone, code }) },
     { auth: false },
   );
 
 export const signInWithPin = (nationalId: string, pin: string) =>
   apiFetch<{ success: boolean; message?: string }>(
     "/api/portal/pin",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, pin }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), nationalId, pin }) },
     { auth: false },
   );
 
@@ -221,7 +248,7 @@ export interface MicromartSignIn {
 export const micromartSignIn = (phone: string, password: string) =>
   apiFetch<MicromartSignIn>(
     "/api/portal/micromart",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, password }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), phone, password }) },
     { auth: false },
   );
 
@@ -240,7 +267,7 @@ export const micromartSignIn = (phone: string, password: string) =>
 export const micromartResetPassword = (phone: string) =>
   apiFetch<{ success: boolean; reachable?: boolean; message?: string }>(
     "/api/portal/micromart",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, phone, reset: true }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), phone, reset: true }) },
     { auth: false },
   );
 
@@ -313,7 +340,7 @@ export const readIdFront = (
     {
       method: "POST",
       body: JSON.stringify({
-        lenderSlug: LENDER_SLUG,
+        lenderSlug: lenderSlug(),
         step: "id",
         ...(opts.nationalId ? { nationalId: opts.nationalId } : {}),
         ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
@@ -411,7 +438,7 @@ export interface ProductsResponse {
 export const listProducts = () =>
   apiFetch<ProductsResponse>(
     "/api/lms/products",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug() }) },
     { auth: false, idempotent: true },
   );
 
@@ -593,7 +620,7 @@ export const pay = (nationalId: string, amount?: number, purpose?: PayPurpose) =
     allocation?: PayAllocation | null;
   }>(
     "/api/portal/pay",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, amount, purpose }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), nationalId, amount, purpose }) },
     { auth: true },
   );
 
@@ -622,7 +649,7 @@ export interface RatibaPlan {
 export const ratibaOffer = (nationalId: string) =>
   apiFetch<RatibaPlan>(
     "/api/portal/standing-order",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, action: "offer" }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), nationalId, action: "offer" }) },
     { auth: true, idempotent: true },
   );
 
@@ -639,7 +666,7 @@ export const ratibaOffer = (nationalId: string) =>
 export const ratibaSetup = (nationalId: string) =>
   apiFetch<{ success: boolean; standingOrderId?: string; status?: string; alreadySet?: boolean; simulated?: boolean; message?: string }>(
     "/api/portal/standing-order",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, action: "setup" }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), nationalId, action: "setup" }) },
     { auth: true },
   );
 
@@ -647,7 +674,7 @@ export const ratibaSetup = (nationalId: string) =>
 export const ratibaCancel = (nationalId: string, standingOrderId: string) =>
   apiFetch<{ success: boolean; cancelled?: boolean; message?: string }>(
     "/api/portal/standing-order",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, nationalId, action: "cancel", standingOrderId }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), nationalId, action: "cancel", standingOrderId }) },
     { auth: true, idempotent: true },
   );
 
@@ -699,7 +726,8 @@ export const whyThisDecision = (nationalId: string) =>
   apiFetch<DecisionResponse>(
     "/api/portal/decision",
     { method: "POST", body: who(nationalId) },
-    { auth: true, idempotent: true },
+    // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );
 
 // connected-suite/src/app/api/portal/ladder/route.ts
@@ -767,7 +795,8 @@ export const ladder = (nationalId: string) =>
   apiFetch<LadderResponse>(
     "/api/portal/ladder",
     { method: "POST", body: who(nationalId) },
-    { auth: true, idempotent: true },
+    // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );
 
 // connected-suite/src/app/api/portal/exposure/route.ts
@@ -826,7 +855,8 @@ export const exposure = (nationalId: string) =>
   apiFetch<ExposureResponse>(
     "/api/portal/exposure",
     { method: "POST", body: who(nationalId) },
-    { auth: true, idempotent: true },
+    // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );
 
 // connected-suite/src/app/api/portal/consent/route.ts
@@ -918,14 +948,14 @@ export interface ThreadDetail {
 
 export const myThreads = () =>
   apiFetch<{ success: boolean; lender: string; threads: ThreadSummary[]; unread: number }>(
-    `/api/portal/messages?lenderSlug=${encodeURIComponent(LENDER_SLUG)}`,
+    `/api/portal/messages?lenderSlug=${encodeURIComponent(lenderSlug())}`,
     {},
     { auth: true, idempotent: true },
   );
 
 export const readThread = (threadId: string) =>
   apiFetch<{ success: boolean; lender: string; thread: ThreadDetail }>(
-    `/api/portal/messages?lenderSlug=${encodeURIComponent(LENDER_SLUG)}&threadId=${encodeURIComponent(threadId)}`,
+    `/api/portal/messages?lenderSlug=${encodeURIComponent(lenderSlug())}&threadId=${encodeURIComponent(threadId)}`,
     {},
     { auth: true, idempotent: true },
   );
@@ -940,7 +970,7 @@ export const sendMessage = (args: {
 }) =>
   apiFetch<{ success: boolean; threadId: string; messageId: string; at: string }>(
     "/api/portal/messages",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, ...args }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), ...args }) },
     { auth: true },
   );
 
@@ -1000,7 +1030,8 @@ export const track = (nationalId: string) =>
   apiFetch<TrackResponse>(
     "/api/portal/track",
     { method: "POST", body: who(nationalId) },
-    { auth: true, idempotent: true },
+    // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );
 
 // ── Applying ─────────────────────────────────────────────────────────────────
@@ -1048,7 +1079,7 @@ export const apply = (args: {
 }) =>
   apiFetch<ApplyResponse>(
     "/api/portal/apply",
-    { method: "POST", body: JSON.stringify({ lenderSlug: LENDER_SLUG, ...args }) },
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), ...args }) },
     { auth: true },
   );
 
@@ -1102,7 +1133,7 @@ export interface KycStatusResponse {
 
 export const kycStatus = () =>
   apiFetch<KycStatusResponse>(
-    `/api/portal/kyc/status?lenderSlug=${encodeURIComponent(LENDER_SLUG)}`,
+    `/api/portal/kyc/status?lenderSlug=${encodeURIComponent(lenderSlug())}`,
     {},
     { auth: true, idempotent: true },
   );
@@ -1215,5 +1246,6 @@ export const home = (nationalId: string) =>
   apiFetch<HomeResponse>(
     "/api/portal/home",
     { method: "POST", body: who(nationalId) },
-    { auth: true, idempotent: true },
+    // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );

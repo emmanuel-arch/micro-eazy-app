@@ -32,6 +32,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { RefreshCw, Inbox } from "lucide-react";
 import { LiquidButton } from "../ui/LiquidButton";
 import { Sky } from "../shell/Sky";
+import { Splash } from "../shell/Splash";
+import { ApiError } from "../../lib/net/transport";
 import { useSession } from "../../lib/session";
 
 type State<T> =
@@ -67,16 +69,38 @@ interface Props<T> {
    * worked. Screens that never mutate anything simply ignore it.
    */
   children: (data: T, reload: () => void) => ReactNode;
+  /**
+   * Hold the lender's full-screen splash while the first read is in flight,
+   * instead of a spinner inside a card.
+   *
+   * For HOME, and deliberately for Home only. It is the screen a customer lands
+   * on straight out of signing in, and it is an aggregate that can take several
+   * seconds over the bridge on a cold server. A spinner in an empty card for
+   * that long reads as the app half-loaded; the splash reads as the app still
+   * arriving — which is true, and it keeps the lender's mark on screen for the
+   * whole of the handover from sign-in to account.
+   *
+   * Every other screen is reached by a tap from inside the app, where the shell
+   * is already standing and a spinner in the content area is the right size of
+   * "one moment".
+   */
+  splash?: boolean;
 }
 
-export function Resource<T>({ title, load, emptyWhen, children }: Props<T>) {
+/** One silent second attempt, on the failures that are usually one bad moment:
+ *  a timeout, or a network drop (both surface as status 0). An application
+ *  error — a 4xx or 5xx with a message — is an answer and is shown at once. */
+const SILENT_RETRIES = 1;
+
+export function Resource<T>({ title, load, emptyWhen, children, splash = false }: Props<T>) {
   const { nationalId } = useSession();
   const [state, setState] = useState<State<T>>({ status: "loading" });
 
   // The national ID is the input; re-running on every render of a parent would
-  // hammer a rate-limited endpoint. `load` is usually an inline arrow, so it is
-  // held in a ref rather than made a dependency — otherwise every parent render
-  // is a new function and a new fetch.
+  // hammer a rate-limited endpoint. `load` MAY be an inline arrow, so it is held
+  // in a ref rather than made a dependency — otherwise every parent render is a
+  // new function and a new fetch. See the note on the effect below for what
+  // stands in for it.
   const loadRef = useRef(load);
   loadRef.current = load;
   const emptyRef = useRef(emptyWhen);
@@ -107,36 +131,62 @@ export function Resource<T>({ title, load, emptyWhen, children }: Props<T>) {
   // Either is better than a spinner that means nothing. And with the ID now
   // restored from /api/portal/session on boot, this path is the exception
   // rather than the rule.
+  // ── `title` IS IN THE DEPENDENCIES, AND THAT IS THE FIX FOR A STUCK SCREEN ─
+  // Every data route in App.tsx renders `<RequireSession><Resource>` in the
+  // same slot of the same <Routes>. React reconciles by type and position, so
+  // walking from `/` to `/track` does NOT mount a new Resource — it re-renders
+  // the SAME instance with new props. With the effect keyed only on
+  // [nationalId, attempt], nothing re-ran: `load` had changed, but it lives in
+  // a ref and is not a dependency.
+  //
+  // In production that looked like this. Home timed out and showed an error.
+  // The customer tapped "Application". The URL changed to /track, and the
+  // screen went on showing Home's error, for ever — no request was made. Tapping
+  // "Messages" appeared to fix it only because Messages is a different component
+  // type, which forces a fresh mount, and coming back to Home then mounted a
+  // fresh Resource that finally fetched.
+  //
+  // `title` is distinct per route and is a string, so it is a stable identity
+  // for "which screen is this" that an inline `load` arrow could never break
+  // — which is exactly why `load` itself stays out of the list.
   useEffect(() => {
     let alive = true;
     setState({ status: "loading" });
     (async () => {
-      try {
-        const data = await loadRef.current(nationalId ?? "");
-        if (!alive) return;
-        const empty = emptyRef.current?.(data) ?? null;
-        setState(empty ? { status: "empty", message: empty } : { status: "ready", data });
-      } catch (e) {
-        if (!alive) return;
-        setState({
-          status: "error",
-          message: e instanceof Error && e.message ? e.message : "We could not load this. Check your connection.",
-        });
+      for (let tries = 0; ; tries++) {
+        try {
+          const data = await loadRef.current(nationalId ?? "");
+          if (!alive) return;
+          const empty = emptyRef.current?.(data) ?? null;
+          setState(empty ? { status: "empty", message: empty } : { status: "ready", data });
+          return;
+        } catch (e) {
+          if (!alive) return;
+          const status = e instanceof ApiError ? e.status : 0;
+          if (status === 0 && tries < SILENT_RETRIES) continue;
+          setState({
+            status: "error",
+            message: e instanceof Error && e.message ? e.message : "We could not load this. Check your connection.",
+          });
+          return;
+        }
       }
     })();
     return () => {
       alive = false;
     };
-  }, [nationalId, attempt]);
+  }, [nationalId, attempt, title]);
 
-  if (state.status === "loading") return <Panel title={title}><Spinner /></Panel>;
+  if (state.status === "loading") {
+    return splash ? <Splash label="Getting your account ready…" /> : <Panel title={title}><Spinner /></Panel>;
+  }
 
   if (state.status === "empty") {
     return (
       <Panel title={title}>
         <span
           className="grid h-11 w-11 place-items-center rounded-2xl"
-          style={{ background: "color-mix(in oklab, var(--navy) 10%, transparent)", color: "var(--navy-ink)" }}
+          style={{ background: "color-mix(in oklab, var(--brand) 10%, transparent)", color: "var(--brand-ink)" }}
         >
           <Inbox className="h-5 w-5" strokeWidth={2} />
         </span>
@@ -176,7 +226,7 @@ function Spinner() {
     <div className="flex flex-col items-center gap-3" role="status" aria-live="polite">
       <span
         className="h-9 w-9 animate-spin rounded-full border-2"
-        style={{ borderColor: "var(--line-strong)", borderTopColor: "var(--green-ink)" }}
+        style={{ borderColor: "var(--line-strong)", borderTopColor: "var(--brand-ink)" }}
       />
       <span className="text-[12.5px] text-ink-faint">Checking with your lender…</span>
     </div>

@@ -28,6 +28,21 @@
     <script type="module" src="/src/preview.tsx"></script>
     <!-- ?pane=1 walks the deck sideways, so a screenshot can be taken of a pane
          that is not the first one. The deck listens for ArrowRight on window. -->
+    <!-- ?measure=1 writes each scroll box's overflow onto <body data-m> after a
+         few seconds, so a headless --dump-dom run can read layout it cannot see. -->
+    <script>
+      if (new URLSearchParams(location.search).get("measure")) {
+        setTimeout(function () {
+          var out = [];
+          document.querySelectorAll("main, .deck-pane").forEach(function (el) {
+            out.push((el.tagName === "MAIN" ? "main" : "pane") + ":" + el.clientHeight + "/" + el.scrollHeight);
+          });
+          out.push("inner:" + innerWidth + "x" + innerHeight);
+          out.push("fonts:" + (document.fonts ? document.fonts.status : "n/a"));
+          document.body.setAttribute("data-m", out.join(" "));
+        }, 4000);
+      }
+    </script>
     <script>
       window.addEventListener("load", function () {
         var n = +(new URLSearchParams(location.search).get("pane") || 0);

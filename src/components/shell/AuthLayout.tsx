@@ -38,6 +38,7 @@
 // that reloads on every navigation.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { ReactNode } from "react";
+import type { Lender } from "../../lib/lenders";
 import { Voices } from "../media/Voices";
 import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
@@ -49,9 +50,24 @@ export function AuthLayout({
    *  steps do not: somebody mid-verification does not need to be sold to, and
    *  a 400px photograph above the form pushes the fields below the fold. */
   deckOnMobile = false,
+  /**
+   * The lender whose door this is, or nothing for Micro Eazy's own front door.
+   *
+   * A lender's sign-in page is not Micro Eazy's sign-in page with a different
+   * logo pasted in: the customer has been HANDED OVER. So with a lender the
+   * mark is theirs, the navy band on a phone becomes their accent, and the
+   * accessible name says their name — see the note on the header below.
+   */
+  lender,
+  /** Sits beside the appearance switch, top right. The lender's sign-in puts
+   *  "Create account" here, which is where a person who is on the wrong door
+   *  looks for the right one. */
+  headerAction,
 }: {
   children: ReactNode;
   deckOnMobile?: boolean;
+  lender?: Lender;
+  headerAction?: ReactNode;
 }) {
   return (
     <div className="lg:grid lg:h-screen lg:grid-cols-[1fr_1.08fr] xl:grid-cols-[1fr_1.15fr]">
@@ -61,7 +77,7 @@ export function AuthLayout({
             laptop it is a plain wordmark in the corner — a gradient bar next to
             a full-bleed photograph is two surfaces competing to be the subject,
             and the photograph should win. See .sky-phone-only in theme.css. */}
-        <header className="sky aurora sky-phone-only relative shrink-0 overflow-hidden rounded-b-[28px] px-5 pb-8 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-none lg:px-10 lg:pb-0 lg:pt-9">
+        <header className={`sky aurora sky-phone-only ${lender ? "sky-brand" : ""} relative shrink-0 overflow-hidden rounded-b-[28px] px-5 pb-8 pt-[max(env(safe-area-inset-top),1rem)] lg:rounded-none lg:px-10 lg:pb-0 lg:pt-9`}>
           {/* ── THE CORNERS OF THE CARD, NOT THE EDGES OF THE COLUMN ────────
               This row used to be centred on the 420px content column, so that
               the mark sat directly above the "Welcome." it belongs to.
@@ -103,12 +119,30 @@ export function AuthLayout({
                 mark is SITTING ON rather than on a prop (see styles/theme.css),
                 so the navy half still gets the white chip it needs on navy. One
                 rule, two grounds, no caller having to remember which. */}
-            <BrandMark size={54} sizeLg={76} />
-            <ThemeToggle variant="band" />
+            {lender ? (
+              // The lender's own mark — the transparent file, so on paper it
+              // sits bare like ours does, and .lender-chip gives it a white
+              // ground on their brand band and in the dark theme.
+              <span className="lender-chip">
+                <img
+                  src={lender.mark}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="h-[46px] w-[46px] object-contain lg:h-[72px] lg:w-[72px]"
+                />
+              </span>
+            ) : (
+              <BrandMark size={54} sizeLg={76} />
+            )}
+            <div className="flex items-center gap-2">
+              {headerAction}
+              <ThemeToggle variant="band" />
+            </div>
           </div>
           {/* The name, for anything that does not render pictures. The visible
               wordmark is gone; the accessible one must not be. */}
-          <span className="sr-only">Micro Eazy</span>
+          <span className="sr-only">{lender ? lender.name : "Micro Eazy"}</span>
         </header>
 
         {deckOnMobile && (

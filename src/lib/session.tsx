@@ -79,6 +79,8 @@ import {
   type Enrolment,
 } from "./api/portal";
 import { onUnauthorised } from "./net/transport";
+import { setLenderSlug } from "./lender";
+import { isLenderSlug } from "./lenders";
 
 /**
  * `unknown` is a real state and collapsing it into `anonymous` is the bug that
@@ -191,6 +193,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const s = await getSession();
         if (!alive) return;
         if (s.authenticated) {
+          // ── THE COOKIE KNOWS WHOSE CUSTOMER THIS IS ─────────────────────────
+          // A borrower session is bound to one lender on the server. The app's
+          // livery has to follow THAT, not whatever this browser last had in
+          // storage — otherwise a phone used for a Micromart account yesterday
+          // and a different lender today would paint the right account in the
+          // wrong company's colours. Set before `status` flips, so the first
+          // signed-in frame is already in the right brand.
+          if (s.lenderSlug && isLenderSlug(s.lenderSlug)) setLenderSlug(s.lenderSlug);
           setStatus("verified");
           setPhoneMasked(s.phoneMasked ?? null);
           // ── THE SECOND FACTOR IS RESTORED HERE, NOT ONLY REMEMBERED ───────

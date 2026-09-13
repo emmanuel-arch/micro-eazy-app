@@ -38,7 +38,7 @@ export function Sky({
     // taken off EVERY screen's content — which on Home was the difference
     // between the shortcuts fitting and being clipped. A phone has all the
     // height it wants and keeps the generous version.
-    <header className="sky aurora relative overflow-hidden rounded-[24px] px-5 pb-16 pt-6 lg:pb-14 lg:pt-4">
+    <header className="sky sky-brand aurora relative overflow-hidden rounded-[24px] px-5 pb-16 pt-6 lg:pb-14 lg:pt-4">
       <div className="relative z-10 flex items-center gap-3 py-3 lg:py-2">
         {onBack && (
           <button

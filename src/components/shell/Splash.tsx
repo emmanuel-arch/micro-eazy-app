@@ -7,26 +7,47 @@
 // to the bottom — and the CSS is its `.pageloader` / `.loader10`, copied across
 // with the values intact. See the note in styles/theme.css.
 //
+// ── TWO LIVERIES, AND WHO DECIDES ───────────────────────────────────────────
+// Micro Eazy is the front door; a lender is the product behind it. The splash
+// has to say which one the customer is standing in, because it is the first
+// thing they see and the thing they see while being handed from one to the
+// other:
+//
+//   platform  Micro Eazy's mark, Micro Eazy green dots. The public front door
+//             (/welcome) and the lender chooser — places where no lender has
+//             been chosen yet and it would be false to show one.
+//   lender    The lender's own mark, their legal name in capitals, their
+//             strapline, and dots in their accent. Everywhere else — a branded
+//             sign-in, and the whole signed-in app.
+//
+// The CALLER decides (see `splashLivery` in App.tsx), because the answer depends
+// on the route and on whether a lender has been chosen, and neither is this
+// component's business. It reads the lender itself, from the store, so it can
+// paint on the very first frame before any route has mounted.
+//
+// ── WHY THE DOTS TAKE `currentColor` ────────────────────────────────────────
+// `.loader10` draws its dots with box-shadows in `currentColor`, so the colour is
+// set once, inline, on the element. The platform uses --green-ink (Micro Eazy's
+// green, legible in both themes); the lender uses --brand-ink, which is their
+// accent in the light theme and their accent lifted for the dark one. A brown
+// dot of #3c320b on the dark theme's 85%-black ground would be invisible, which
+// is the one failure a loading indicator cannot have.
+//
 // ── WHY IT IS A COMPONENT AND NOT A setTimeout ──────────────────────────────
 // The original shows this for a flat two seconds on every screen, from a timer
-// that is not tied to anything (`setTimeout(… 2000)` in an effect with no
-// dependency array, so it re-arms on every render). That is a two-second tax on
-// a customer who is already signed in and just wants their balance.
-//
-// Here it is bound to a REAL question — "who is holding this phone?" — and it
-// leaves when the answer arrives. On a warm session that is a few hundred
-// milliseconds; on a cold one it covers the round trip that used to render as a
-// bare "Checking your session…" line. Same picture, honest duration.
-//
-// MIN_MS is the one concession to the original: an answer that arrives in 80ms
-// would otherwise flash the mark and yank it away, which reads as a glitch
-// rather than as a fast app. It is a floor, never a delay on a slow answer.
+// that is not tied to anything. Here it is bound to a REAL question — "who is
+// holding this phone?", or on Home "has the account arrived?" — and it leaves
+// when the answer does. MIN_MS is the one concession: an answer that arrives in
+// 80ms would otherwise flash the mark and yank it away, which reads as a glitch.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { BrandMark } from "./BrandMark";
+import { useLender } from "../../lib/lender";
 
 /** Below this, a splash reads as a flicker. Above it, it reads as an arrival. */
 const MIN_MS = 900;
+
+export type SplashLivery = "platform" | "lender";
 
 /**
  * True until `MIN_MS` has passed since mount. Callers combine it with their own
@@ -41,7 +62,16 @@ export function useSplashFloor(minMs: number = MIN_MS): boolean {
   return holding;
 }
 
-export function Splash({ label = "Please wait..." }: { label?: string }) {
+export function Splash({
+  label = "Please wait...",
+  livery = "lender",
+}: {
+  label?: string;
+  livery?: SplashLivery;
+}) {
+  const lender = useLender();
+  const platform = livery === "platform";
+
   return (
     // `role="status"` and not `alert`: this is a progress report, and an alert
     // interrupts whatever a screen reader was saying to announce it.
@@ -53,16 +83,46 @@ export function Splash({ label = "Please wait..." }: { label?: string }) {
         <div className="mb-auto pt-4" />
 
         <div className="flex flex-col items-center">
-          {/* Bigger than the original's 60px: on a blank white screen the mark
-              is the ONLY thing to look at, and at 60 it read as a favicon
-              somebody had centred. The chip follows the surface rule in
-              styles/theme.css — none on white, one in the dark theme. */}
-          <BrandMark size={84} />
+          {platform ? (
+            <>
+              {/* The chip follows the surface rule in styles/theme.css — none
+                  on white, one in the dark theme. */}
+              <BrandMark size={84} />
+              <p className="mt-3 text-[13px] font-medium text-ink-soft">Micro Eazy</p>
+              <p className="mt-0.5 text-[22px] font-bold tracking-[-0.02em] text-ink">Customer Portal</p>
+            </>
+          ) : (
+            <>
+              {/* The lender's mark on a white plate. Several lenders' files are
+                  drawn for white letterhead and have no transparency, and every
+                  one of them carries dark tones that sink into the dark theme's
+                  ground — the plate is what keeps the mark a mark in both. */}
+              <span
+                className="grid place-items-center rounded-2xl bg-white p-3"
+                style={{ boxShadow: "0 14px 34px -18px rgb(0 0 0 / 0.35)" }}
+              >
+                <img
+                  src={lender.mark}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-[72px] w-[72px] object-contain"
+                  draggable={false}
+                />
+              </span>
+              {/* Set in capitals and tracked, the way the lender's own splash
+                  and logo set it. The name comes from the registry — nothing
+                  here spells out a lender. */}
+              <p className="mt-4 text-[13px] font-bold uppercase tracking-[0.16em] text-ink">
+                {lender.legalName}
+              </p>
+              <p className="mt-1 text-[22px] font-bold tracking-[-0.02em] text-ink">{lender.slogan}</p>
+            </>
+          )}
 
-          <p className="mt-3 text-[13px] font-medium text-ink-soft">Micro Eazy</p>
-          <p className="mt-0.5 text-[22px] font-bold tracking-[-0.02em] text-ink">Customer Portal</p>
-
-          <div className="loader10 mx-auto mt-9" />
+          <div
+            className="loader10 mx-auto mt-9"
+            style={{ color: platform ? "var(--green-ink)" : "var(--brand-ink)" }}
+          />
         </div>
 
         <p className="mt-auto pb-6 text-[12.5px] text-ink-faint">{label}</p>

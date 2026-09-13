@@ -27,8 +27,36 @@ import { useCallback, useRef, useState, type ButtonHTMLAttributes, type ReactNod
 import type { LucideIcon } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
-type Variant = "primary" | "metal" | "ghost";
+type Variant = "primary" | "metal" | "ghost" | "solid";
 type Size = "sm" | "md" | "lg";
+
+/**
+ * ── THE SOLID VARIANT ───────────────────────────────────────────────────────
+ * `primary` is Micro Eazy's lime with navy type on it — the one call to action
+ * this product owns. It is exactly wrong for a screen that belongs to a LENDER,
+ * where the commit button has to be their colour.
+ *
+ * `solid` is the same machined object — same bezel, same specular under the
+ * thumb, same 4px travel — filled with a colour the caller names. It is a fill
+ * rather than a gradient because these are brand colours from somebody else's
+ * style guide, and inventing a second stop for a colour a lender's marketing
+ * team signed off is not ours to do. The face keeps its top-light sheen, so it
+ * still reads as a machined part rather than as a flat rectangle.
+ *
+ * `ink` is the type ON the fill, and callers pass it explicitly rather than it
+ * being derived: white clears AA on every accent in lib/lenders.ts (worst case
+ * 5.28:1), but a future lender with a pale yellow would need dark type, and a
+ * contrast decision belongs where somebody can check it.
+ */
+export type SolidTone = {
+  /** The fill. A CSS colour or custom property — `var(--brand)` is the usual. */
+  fill: string;
+  /** Type and icons on that fill. */
+  ink: string;
+  /** Optional darker stop for the rim, so the button has an edge. Defaults to
+   *  the fill itself, which is still correct — just flatter. */
+  rim?: string;
+};
 
 interface LiquidButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   children?: ReactNode;
@@ -40,6 +68,8 @@ interface LiquidButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>
   /** Stretch to the container. The bottom-of-screen commit button always does. */
   block?: boolean;
   loading?: boolean;
+  /** Required by `variant="solid"`, ignored by every other variant. */
+  tone?: SolidTone;
 }
 
 const SIZE: Record<Size, { pad: string; text: string; icon: string; glow: number }> = {
@@ -56,6 +86,7 @@ export function LiquidButton({
   size = "md",
   block = false,
   loading = false,
+  tone,
   disabled,
   className = "",
   onPointerDown,
@@ -123,17 +154,21 @@ export function LiquidButton({
         background: inert
           ? "var(--surface-sunk)"
           : variant === "primary"
-            ? "linear-gradient(180deg, #8fdd18 0%, var(--lime) 52%, #66ab08 100%)"
-            : variant === "metal"
-              ? "var(--metal-rim)"
-              : "transparent",
+            ? "var(--cta-fill, linear-gradient(180deg, #8fdd18 0%, var(--lime) 52%, #66ab08 100%))"
+            : variant === "solid"
+              ? (tone?.rim ?? tone?.fill ?? "var(--brand)")
+              : variant === "metal"
+                ? "var(--metal-rim)"
+                : "transparent",
         color: inert
           ? "var(--ink-faint)"
           : variant === "primary"
-            ? "var(--navy-deep)"
-            : variant === "metal"
-              ? "var(--metal-ink)"
-              : "var(--ink)",
+            ? "var(--cta-ink, var(--navy-deep))"
+            : variant === "solid"
+              ? (tone?.ink ?? "var(--brand-on)")
+              : variant === "metal"
+                ? "var(--metal-ink)"
+                : "var(--ink)",
         padding: variant === "ghost" ? undefined : "2px",
         boxShadow:
           variant === "ghost" || inert
@@ -157,9 +192,14 @@ export function LiquidButton({
             ? "transparent"
             : variant === "primary"
               ? "linear-gradient(180deg, rgb(255 255 255 / 0.28) 0%, rgb(255 255 255 / 0) 46%)"
-              : variant === "metal"
-                ? "var(--metal-face)"
-                : "transparent",
+              : variant === "solid"
+                ? // The fill, with the same top-light the primary gets. Without
+                  // it a solid button is a flat rectangle and loses the machined
+                  // read the whole component exists for.
+                  `linear-gradient(180deg, rgb(255 255 255 / 0.22) 0%, rgb(255 255 255 / 0) 52%), ${tone?.fill ?? "var(--brand)"}`
+                : variant === "metal"
+                  ? "var(--metal-face)"
+                  : "transparent",
           boxShadow:
             variant === "ghost" || inert
               ? "none"

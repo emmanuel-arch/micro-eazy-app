@@ -65,9 +65,30 @@ export function useCutOff(resolve: () => HTMLElement | null, deps: unknown[]): b
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     el.addEventListener("scroll", measure, { passive: true });
 
+    // ── THE FIRST MEASURE IS TAKEN IN THE WRONG FONT ──────────────────────────
+    // On a cold load, the first layout happens before Inter has arrived from
+    // Google Fonts, in a fallback that sets taller. Home's first pane overflows
+    // by a few pixels in THAT font, the fade switches on — and when Inter lands
+    // and everything reflows a little shorter, the change can happen deep inside
+    // a card, below anything the observer above is watching. The fade stayed on
+    // over a pane that fitted perfectly: a pale band across the bottom of the
+    // screen with nothing under it.
+    //
+    // So measure again when the fonts are ready, when any image in the box
+    // finishes (an image with no reserved height is the other late reflow), and
+    // once more after a beat as a backstop.
+    let alive = true;
+    const again = () => alive && measure();
+    document.fonts?.ready.then(again);
+    el.addEventListener("load", again, true);
+    const late = window.setTimeout(again, 1200);
+
     return () => {
+      alive = false;
       ro.disconnect();
       el.removeEventListener("scroll", measure);
+      el.removeEventListener("load", again, true);
+      window.clearTimeout(late);
     };
     // `resolve` is deliberately not a dependency — it is a fresh closure every
     // render, and the caller's `deps` are what actually say when to look again.

@@ -1,297 +1,134 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// THE FRONT DOOR.
+// THE FRONT DOOR — Micro Eazy's, before any lender has been chosen.
 //
-// The first screen a customer sees, and the only one on which this app has to
-// earn the right to ask for a national ID number. Two halves and they do
-// different jobs:
+// The first screen a new, signed-out customer sees. It asks for exactly one
+// thing — the number their M-Pesa is on — and offers exactly two ways forward:
 //
-//   · THE DECK — four photographs of the people who actually borrow here, with
-//     a promise beside each one. It is the whole argument for the product, made
-//     in pictures, before a single field is asked for. See components/media/
-//     Voices, and the note there about why these are promises and not
-//     testimonials.
-//   · THE FORM — a phone number and nothing else. Every extra field on a sign-in
-//     screen is a percentage of people who do not finish, and this funnel is
-//     opened on a prepaid bundle at the side of a road.
+//   CONTINUE          Micro Eazy green. "I am new here, or I do not know which
+//                     lender I am with." Goes to the lender chooser, where the
+//                     number typed here is carried along and the code is sent
+//                     only once somebody has picked who they are borrowing from.
+//   <LENDER> LOGIN    The pioneering lender's own colour. "I already have an
+//                     account with them." Goes straight to that lender's branded
+//                     sign-in page. Today that is Micromart, whose existing book
+//                     is tens of thousands of people already holding a password.
 //
-// ── THE ORDER IS DIFFERENT ON A PHONE, ON PURPOSE ────────────────────────────
-// On a laptop the deck is the left column and the form is the right, read left
-// to right. On a handset the deck comes FIRST and the form underneath, because
-// the phone is the design target and the argument has to arrive before the ask.
-// The one thing that never moves below the fold on a 360×640 screen is the
-// continue button — hence the deck's aspect ratio dropping on small screens.
+// ── WHY THE CODE IS NO LONGER SENT FROM HERE ────────────────────────────────
+// It was: the front door posted to /api/portal/otp and went straight to the code
+// gate. That sent a verification SMS BEFORE the customer had said which lender
+// they were with — and for a bridged lender the code is dispatched through that
+// lender's own SMS outbox, under their own sender id. A code sent before the
+// choice is a code sent under the wrong name, or under a guess. So the number
+// is collected here and the code goes out from the chooser, once there is a
+// lender to send it as.
 //
-// ── WHAT THIS SCREEN DOES AND DOES NOT DO ────────────────────────────────────
-// It asks the server to send a code to the number typed here, and then hands
-// off to the gate (/verify), which is where identity is actually proved. It
-// does NOT decide anything: a code being sent is not a session, and nothing
-// typed here grants access to a single screen — the same rule every other
-// screen in this app follows.
+// ── WHY TWO BUTTONS, NOT THREE ──────────────────────────────────────────────
+// The third, "Create account", used to live here too. It now lives where it
+// belongs — on the lender's own create-account door — because an account is
+// always an account WITH somebody. See screens/LenderSignIn.tsx.
 //
-// It used to navigate straight to /join on nine digits, sending nothing. That
-// meant onboarding opened for anyone who typed a number, and the first time the
-// app asked the server who they were would have been much later, on a screen
-// that assumed it already knew.
+// ── WHY THE PILL BUTTONS, NOT THE GLASS TILES ───────────────────────────────
+// The tiles were one shape in three tints, which read as a menu of equal
+// options. These two are commitments, and they use the same machined control as
+// every other commit button in the app ("Sign in", "Apply for a loan") — solid
+// fills, their colour carrying the meaning before the word is read.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Info, KeyRound, Loader2, Phone, UserPlus } from "lucide-react";
+import { ArrowRight, Info, KeyRound } from "lucide-react";
 import { AuthLayout } from "../components/shell/AuthLayout";
-import { useSession } from "../lib/session";
+import { PhoneField, looksLikeAPhone } from "../components/auth/PhoneField";
+import { LiquidButton } from "../components/ui/LiquidButton";
+import { LENDERS } from "../lib/lenders";
+import { setLenderSlug } from "../lib/lender";
 
 /**
- * Kenyan mobile numbers, loosely. Deliberately loose: this is a courtesy check
- * that stops an obvious typo before a round trip, NOT a validation — the server
- * owns that, and a client-side rule strict enough to be authoritative is a rule
- * that eventually rejects a real customer on a new prefix.
+ * The lender whose login gets the second button. The first one open to
+ * borrowers, in registry order — so when a second lender opens, this screen does
+ * not have to change, only lib/lenders.ts does. Nothing below names Micromart.
  */
-const looksLikeAPhone = (v: string) => v.replace(/\D/g, "").length >= 9;
+const PIONEER = LENDERS.find((l) => l.available) ?? LENDERS[0];
 
 export default function Welcome() {
   const navigate = useNavigate();
-  const { requestCode } = useSession();
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
-  /** Which button submitted the form. A ref and not state on purpose: it is
-   *  read once inside the submit handler that the click itself triggers, and as
-   *  state it would need a render to land before submit could see it. */
-  const intentRef = useRef<"continue" | "join">("continue");
 
   const ok = looksLikeAPhone(phone);
 
-  // ── THIS IS WHERE THE FUNNEL USED TO LEAK ──────────────────────────────────
-  // The button navigated straight to /join. Nothing was sent, nothing was
-  // verified, and onboarding opened for anybody who typed nine digits. Now the
-  // number has to receive a code before the app will go anywhere.
-  const submit = async (e: FormEvent) => {
+  const onContinue = (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (!ok || busy) return;
-    setBusy(true);
-    setError(null);
-    const r = await requestCode(phone);
-    setBusy(false);
-
-    if (!r.ok) {
-      setError(r.message);
-      return;
-    }
-
-    // `delivered: false` still comes back 200 with success:true — the request was
-    // accepted, no provider could send it. Moving on silently would park somebody
-    // on a code screen waiting for an SMS that is not coming. Outside production
-    // the route hands back the code itself so the flow stays walkable.
-    if (!r.delivered) {
-      if (r.devCode) {
-        setDevCode(r.devCode);
-      } else {
-        setError(r.message || "We could not send the code just now. Please try again shortly.");
-        return;
-      }
-    }
-
-    // The phone travels in route state, not in the URL: a number in an address
-    // bar ends up in history, in screenshots, and in shared links.
-    // The phone travels in route state, not in the URL. `intent` rides with it
-    // so somebody who pressed "Create an account" goes straight to onboarding
-    // once the code is in, rather than through the returning-or-new branch.
-    navigate("/verify", { state: { phone, intent: intentRef.current } });
+    if (!ok) return;
+    // Route state, never the URL: a number in an address bar ends up in history,
+    // in screenshots, and in links shared with a friend.
+    navigate("/lenders", { state: { phone } });
   };
 
-  // ── The form column ────────────────────────────────────────────────────────
-  // Extracted because it is rendered once but LAID OUT twice: under the deck on
-  // a phone, beside a full-bleed photograph on a laptop. Duplicating the markup
-  // to achieve that is how the two copies drift apart, and a sign-in form that
-  // is subtly different at one breakpoint is a bug nobody notices until it is in
-  // somebody's hands.
-  const form = (
-    <div className="w-full">
-      <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink lg:text-[30px]">Welcome.</h1>
-      <p className="mt-2 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
-        Enter the number your M-Pesa is on. That is the whole of it — we will take you through the rest one step at a
-        time.
-      </p>
+  const onLenderLogin = () => {
+    // The handover. From here on the app wears this lender — the splash, the
+    // sign-in page and, once signed in, the whole shell.
+    setLenderSlug(PIONEER.slug);
+    // The number rides along if they typed one, so the lender's sign-in does not
+    // ask for it twice. If they did not, the sign-in simply opens empty.
+    navigate(`/${PIONEER.slug}/signin`, { state: looksLikeAPhone(phone) ? { phone } : undefined });
+  };
 
-      <form onSubmit={submit} className="mt-6">
-        <label htmlFor="phone" className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
-          Phone number
-        </label>
-        <div
-          className="mt-2 flex items-center gap-2.5 rounded-2xl border px-4 transition-colors focus-within:border-[var(--green-ink)]"
-          style={{ background: "var(--surface)", borderColor: touched && !ok ? "var(--line-strong)" : "var(--line)" }}
-        >
-          <Phone className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2} />
-          <span className="shrink-0 text-[15px] font-medium text-ink-soft">+254</span>
-          <input
-            id="phone"
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            placeholder="7XX XXX XXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            aria-invalid={touched && !ok}
-            aria-describedby={touched && !ok ? "phone-error" : undefined}
-            className="tnum min-w-0 flex-1 bg-transparent py-4 text-[16px] text-ink outline-none placeholder:text-ink-faint"
-          />
-        </div>
-        {/* Only after a submit. Marking a field wrong while somebody is still
-            typing the first digit of it is how a form tells people they are
-            failing at something they have not finished. */}
-        {touched && !ok && (
-          <p id="phone-error" className="mt-2 text-[12.5px] text-ink-soft">
-            That does not look like a full number yet — nine digits after the +254.
-          </p>
-        )}
-
-        {/* The server's own words, not a generic failure. It is the thing that
-            knows about rate limits ("too many codes for this number"), and
-            rewriting that as "something went wrong" would hide the one
-            instruction the customer can act on. */}
-        {error && (
-          <p role="alert" className="mt-3 text-[12.5px] font-medium leading-snug" style={{ color: "#e11d48" }}>
-            {error}
-          </p>
-        )}
-        {devCode && !error && (
-          <p
-            className="mt-3 rounded-lg px-3 py-2 text-[12.5px] leading-snug text-ink-soft"
-            style={{ background: "var(--surface-sunk)" }}
-          >
-            SMS is not configured here, so no message will arrive — your code is{" "}
-            <strong className="tnum font-semibold text-ink">{devCode}</strong>.
-          </p>
-        )}
-
-        {/* ── THE THREE DOORS: ONE SHAPE, THREE COLOURS, ONE WORD EACH ──────
-            These have now been wrong in two opposite directions, and both
-            failures are worth keeping written down.
-
-            FIRST they were three different species — a saturated green pill, a
-            hairline outlined button, and a bordered row with an icon. That read
-            as one real option and two afterthoughts, when "already with
-            Micromart" is the door MOST people need on day one: Micromart's
-            existing book is tens of thousands of people who already hold a
-            password sent from Micromart's own outbox.
-
-            THEN, correcting it, they became three identical cards separated only
-            by a small tinted icon — each carrying a bold label AND a grey line
-            of explanation underneath. Six lines of type in a stack of three
-            controls. The eye could no longer choose without READING, and on the
-            first screen of a product opened on a prepaid bundle at the side of a
-            road, reading is the most expensive thing you can ask for.
-
-            So: one shape, three COLOURS, one word each. Green is forward, blue
-            is new, gold is the key you already have — carried in .glass-tile's
-            --tone (see styles/theme.css), which also owns the hover: a lift with
-            a little overshoot, a tone-coloured glow, and one pass of light
-            across the face. The colour does the sorting the paragraphs used to
-            do, and it does it before the eye has focused.
-
-            What the sub-lines were saying has not been thrown away — it is on
-            each button's accessible name, where it reaches the people who were
-            actually relying on it. */}
-        <div className="mt-5 space-y-2.5">
-          <button
-            type="submit"
-            onClick={() => {
-              intentRef.current = "continue";
-            }}
-            disabled={busy}
-            aria-label="Continue — we send a code to this number"
-            className="glass-tile tone-green px-4 py-3.5"
-          >
-            <span className="glass-tile__chip">
-              {busy ? (
-                <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.4} />
-              ) : (
-                <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} />
-              )}
-            </span>
-            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">
-              {busy ? "Sending your code" : "Continue"}
-            </span>
-          </button>
-
-          {/* Same code, same gate, different destination. It submits the form
-              like the tile above it — the code still has to reach the handset
-              first — and only sets where the customer lands afterwards.
-
-              It grants nothing. Onboarding is still behind the session, the KYC
-              endpoint still demands one, and the enrolment check still runs. So
-              somebody who presses this and IS already a customer is told so and
-              sent to sign in, which is exactly what should happen. */}
-          <button
-            type="submit"
-            onClick={() => {
-              intentRef.current = "join";
-            }}
-            disabled={busy}
-            aria-label="Create account — new here, it takes about two minutes"
-            className="glass-tile tone-blue px-4 py-3.5"
-          >
-            <span className="glass-tile__chip">
-              <UserPlus className="h-[18px] w-[18px]" strokeWidth={2.3} />
-            </span>
-            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Create account</span>
-            <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
-          </button>
-
-          {/* ── THE MICROMART DOOR, IN TWO WORDS ──────────────────────────
-              Not a footnote. On day one this is the door most people need, and
-              naming the DESTINATION is what makes it minimal without making it
-              cryptic: an existing Micromart customer recognises their lender's
-              name instantly, and somebody who has never heard of Micromart
-              correctly reads it as not-for-them and moves on. "Already with
-              Micromart? / Sign in with the password they sent you." said the
-              same thing in fourteen words and a second line of grey type. */}
-          <button
-            type="button"
-            onClick={() => navigate("/signin")}
-            disabled={busy}
-            aria-label="Micromart login — sign in with the password Micromart sent you"
-            className="glass-tile tone-gold px-4 py-3.5"
-          >
-            <span className="glass-tile__chip">
-              <KeyRound className="h-[18px] w-[18px]" strokeWidth={2.3} />
-            </span>
-            <span className="min-w-0 flex-1 text-[15px] font-bold leading-tight">Micromart login</span>
-            <ArrowRight className="h-4 w-4 shrink-0 opacity-60" />
-          </button>
-        </div>
-      </form>
-
-      {/* ── THE ASSURANCE ───────────────────────────────────────────────────
-          This was 12px grey text set directly on the page. On a laptop that
-          page is a photograph, and the one sentence on the screen whose entire
-          job is to be BELIEVED before somebody types a national ID number was
-          the least legible thing on it.
-
-          It now sits on a solid ground of its own — not glass, because this is
-          the sentence that must never be at the mercy of what is behind it —
-          and leads with a notice mark rather than a shield, because it is
-          telling the customer something they need to take in, not decorating
-          the claim with a security motif. */}
-      <div className="assurance mt-5 flex items-start gap-3 p-3.5">
-        <span
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
-          style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
-        >
-          <Info className="h-[17px] w-[17px]" strokeWidth={2.4} />
-        </span>
-        <p className="text-[12px] leading-relaxed text-ink-soft">
-          We check your number against your national ID before any money moves. Nothing is shared with anyone who is
-          not lending to you.
+  return (
+    <AuthLayout deckOnMobile>
+      <div className="w-full">
+        <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink lg:text-[30px]">Welcome.</h1>
+        <p className="mt-3 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
+          Enter the number your M-Pesa is on. That is the whole of it — we will take you through the rest one step at a
+          time.
         </p>
-      </div>
-    </div>
-  );
 
-  // The frame — mark top-left, content left of centre, photography sliding down
-  // the right — belongs to the whole front-of-house flow, not to this screen.
-  // See components/shell/AuthLayout.tsx.
-  return <AuthLayout deckOnMobile>{form}</AuthLayout>;
+        <form onSubmit={onContinue} className="mt-6">
+          <PhoneField id="phone" value={phone} onChange={setPhone} showError={touched} />
+
+          <div className="mt-5 space-y-3">
+            {/* Micro Eazy green — the `primary` fill is the lime-to-green of the
+                mark itself. */}
+            <LiquidButton type="submit" size="lg" block trailingIcon={ArrowRight}>
+              Continue
+            </LiquidButton>
+
+            {/* The lender's own accent, straight from the LMS Org row — the same
+                colour their staff see on the console. White type on it is
+                checked for every lender in lib/lenders.ts. */}
+            <LiquidButton
+              type="button"
+              variant="solid"
+              size="lg"
+              block
+              icon={KeyRound}
+              tone={{ fill: PIONEER.accent, rim: PIONEER.accent2, ink: "#ffffff" }}
+              onClick={onLenderLogin}
+              aria-label={`${PIONEER.short} login — sign in with the password ${PIONEER.short} sent you`}
+            >
+              {PIONEER.short} login
+            </LiquidButton>
+          </div>
+        </form>
+
+        {/* ── THE ASSURANCE ─────────────────────────────────────────────────
+            On a solid ground of its own — not glass, because this is the one
+            sentence on the screen that must be believed before somebody types a
+            national ID number, and it cannot be at the mercy of whatever frame of
+            photography happens to be behind it. */}
+        <div className="assurance mt-6 flex items-start gap-3 p-3.5">
+          <span
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+            style={{ background: "color-mix(in oklab, var(--navy) 14%, transparent)", color: "var(--navy-ink)" }}
+          >
+            <Info className="h-[17px] w-[17px]" strokeWidth={2.4} />
+          </span>
+          <p className="text-[12px] leading-relaxed text-ink-soft">
+            We check your number against your national ID before any money moves. Nothing is shared with anyone who is
+            not lending to you.
+          </p>
+        </div>
+      </div>
+    </AuthLayout>
+  );
 }

@@ -11,7 +11,8 @@
 //     │  pane 0        │ pane 1   │ pane 2   │   ← one track, translated
 //     │  (in view)     │ (waiting)│          │
 //     └────────────────┴──────────┴──────────┘
-//       ‹ ●━● ›  What next »        ← the pager, drawn into the shell's footer
+//                 ‹ ●━● ›  Your standing »       ← the pager, centred under
+//     ════════════ legal bar, edge to edge ═══════   the panes, above the footer
 //
 // ── HOW IT MOVES, AND WHY THERE IS NO MEASUREMENT ───────────────────────────
 // The track is exactly one viewport wide and every pane is `flex: 0 0 100%`, so
@@ -289,7 +290,8 @@ export function Deck({
         <ScrollVeil show={cutOff} />
       </div>
 
-      {/* Into the shell's footer if there is one, in place if there is not. */}
+      {/* Into the shell's slot above the legal bar if there is one, in place if
+          there is not. */}
       {desktop && pager && (slot ? createPortal(pager, slot) : <div className="mt-2 flex justify-end">{pager}</div>)}
     </div>
   );

@@ -1,36 +1,48 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// A DEV-ONLY HARNESS FOR THE SIGNED-IN SHELL.
+// A DEV-ONLY HARNESS FOR SCREENS THAT ARE HARD TO REACH.
 //
 // The signed-in screens are behind a session, and getting one means sending a
-// real verification code through Micromart's own SMS outbox to a real handset.
-// That is not a thing to do in order to look at a layout.
+// real verification code through the lender's own SMS outbox to a real handset.
+// Several of the public doors need ROUTE STATE (the phone number carried from
+// the front door) that no URL can supply. Neither is a thing to do, or fake in
+// the real router, in order to look at a layout.
 //
-// So this entry mounts the shell and a screen directly, on sample data, with no
-// guard and no network. It is served by `vite dev` at /preview.html and is never
-// part of a production build — nothing imports it, and the router does not know
-// it exists.
+// So this entry mounts a screen directly, on sample data, with no guard and no
+// network. It is served by `vite dev` at /preview.html and is never part of a
+// production build — Vite builds index.html alone, and nothing imports this.
 //
-//   /preview.html                     Home, light
-//   /preview.html?theme=dark          Home, dark
-//   /preview.html?wallpaper=none      Home, no floor
+//   /preview.html                         Home, in the shell
+//   /preview.html?screen=tall             a screen not yet cut into panes
+//   /preview.html?screen=lenders          the lender chooser, phone carried
+//   /preview.html?screen=lenders&pick=1   …with Micromart already chosen
+//   /preview.html?screen=verify           the lender's code screen
+//   /preview.html?screen=signin           the lender's sign-in
+//   /preview.html?screen=join             the lender's create-account door
+//   /preview.html?screen=splash           the lender's loading screen
+//   /preview.html?screen=splash-platform  Micro Eazy's loading screen
+//
+//   &theme=dark   &wallpaper=none   &pane=1
 //
 // Delete it freely. It holds no state anything else depends on.
 // ─────────────────────────────────────────────────────────────────────────────
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/shell/AppShell";
 import { Wallpaper } from "./components/shell/Wallpaper";
+import { Splash } from "./components/shell/Splash";
 import { GlowTabs } from "./components/nav/GlowNav";
 import { ThemeProvider } from "./lib/theme";
+import { LenderThemeProvider, setLenderSlug } from "./lib/lender";
 import { SessionProvider } from "./lib/session";
 import Home from "./screens/Home";
+import LenderChoice from "./screens/LenderChoice";
+import LenderVerify from "./screens/LenderVerify";
+import LenderWelcome from "./screens/LenderWelcome";
+import SignInPassword from "./screens/SignInPassword";
 import { SAMPLE_HOME } from "./lib/api/samples";
 import "./styles/theme.css";
 
-/** `?screen=tall` — a screen that has NOT been cut into panes, to check the
- *  other half of the frame: it scrolls inside the content box, with no bar, a
- *  fade at the foot, and the rail and the legal bar staying put. */
 function Tall() {
   return (
     <div className="space-y-3">
@@ -46,20 +58,73 @@ function Tall() {
   );
 }
 
-const screen = new URLSearchParams(location.search).get("screen");
+/** Clicks the first lender row after mount, so the chooser can be captured with
+ *  its Continue showing. */
+function AutoPick() {
+  useEffect(() => {
+    const t = setTimeout(() => {
+      (document.querySelector('[role="radio"]:not([aria-disabled="true"])') as HTMLElement | null)?.click();
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);
+  return null;
+}
+
+const params = new URLSearchParams(location.search);
+const screen = params.get("screen");
+const PHONE = { phone: "0758517032" };
+
+const DOORS: Record<string, { path: string; entry: string; element: React.ReactNode; state?: unknown }> = {
+  lenders: { path: "/lenders", entry: "/lenders", element: <LenderChoice />, state: PHONE },
+  verify: { path: "/:slug/verify", entry: "/micromart/verify", element: <LenderVerify />, state: PHONE },
+  signin: { path: "/:slug/signin", entry: "/micromart/signin", element: <SignInPassword />, state: PHONE },
+  join: { path: "/:slug/welcome", entry: "/micromart/welcome", element: <LenderWelcome /> },
+};
+
+function Body() {
+  if (screen === "splash") return <Splash livery="lender" />;
+  if (screen === "splash-platform") return <Splash livery="platform" />;
+
+  const door = screen ? DOORS[screen] : undefined;
+  if (door) {
+    // The branded doors wear the lender; the chooser is still Micro Eazy's.
+    if (screen !== "lenders") setLenderSlug("micromart");
+    return (
+      <MemoryRouter initialEntries={[{ pathname: door.entry, state: door.state }]}>
+        <SessionProvider>
+          <Wallpaper />
+          {screen === "lenders" && params.get("pick") && <AutoPick />}
+          <main className="mx-auto w-full max-w-none">
+            <Routes>
+              <Route path={door.path} element={door.element} />
+              <Route path="*" element={<p className="p-8">navigated away</p>} />
+            </Routes>
+          </main>
+        </SessionProvider>
+      </MemoryRouter>
+    );
+  }
+
+  setLenderSlug("micromart");
+  return (
+    <BrowserRouter>
+      <SessionProvider>
+        <div className="min-h-full">
+          <Wallpaper />
+          <AppShell>{screen === "tall" ? <Tall /> : <Home data={SAMPLE_HOME} />}</AppShell>
+          <GlowTabs />
+        </div>
+      </SessionProvider>
+    </BrowserRouter>
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <BrowserRouter>
-        <SessionProvider>
-          <div className="min-h-full">
-            <Wallpaper />
-            <AppShell>{screen === "tall" ? <Tall /> : <Home data={SAMPLE_HOME} />}</AppShell>
-            <GlowTabs />
-          </div>
-        </SessionProvider>
-      </BrowserRouter>
+      <LenderThemeProvider>
+        <Body />
+      </LenderThemeProvider>
     </ThemeProvider>
   </StrictMode>,
 );

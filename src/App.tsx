@@ -12,16 +12,21 @@
 // verification flow is an invitation to abandon it, and an abandoned KYC session
 // is a customer who has handed over a photograph of their ID for nothing.
 // ─────────────────────────────────────────────────────────────────────────────
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import { GlowTabs } from "./components/nav/GlowNav";
 import { AppShell } from "./components/shell/AppShell";
 import { Wallpaper } from "./components/shell/Wallpaper";
 import { ThemeProvider } from "./lib/theme";
 import { SessionProvider, useSession } from "./lib/session";
+import { LenderThemeProvider, hasChosenLender, setLenderSlug, useLender } from "./lib/lender";
+import { isLenderSlug, lenderBySlug } from "./lib/lenders";
+import LenderChoice from "./screens/LenderChoice";
+import LenderVerify from "./screens/LenderVerify";
+import LenderWelcome from "./screens/LenderWelcome";
 import SignIn from "./screens/SignIn";
 import SignInPassword from "./screens/SignInPassword";
-import { Splash, useSplashFloor } from "./components/shell/Splash";
+import { Splash, useSplashFloor, type SplashLivery } from "./components/shell/Splash";
 import { Resource } from "./components/data/Resource";
 import { exposure, home, ladder, track, whyThisDecision } from "./lib/api/portal";
 import Home from "./screens/Home";
@@ -58,7 +63,78 @@ import You from "./screens/You";
 // customer IS signed in by then, and a wizard with no way to reach your own
 // account or sign out reads as a trap rather than as focus. The stepper still
 // says how far through it they are.
-const FOCUSED = ["/welcome", "/verify", "/signin"];
+const FOCUSED = ["/welcome", "/verify", "/signin", "/lenders"];
+
+/**
+ * The lender's own public doors — /micromart/signin, /axe/welcome and so on.
+ * Matched by shape rather than listed, so a lender added to lib/lenders.ts gets
+ * its doors without a line changing here.
+ */
+const LENDER_DOOR = /^\/([a-z0-9-]+)\/(signin|welcome|verify)\/?$/;
+
+const isPublicDoor = (pathname: string): boolean => {
+  if (FOCUSED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
+  const m = LENDER_DOOR.exec(pathname);
+  return Boolean(m && isLenderSlug(m[1]));
+};
+
+/**
+ * ── WHOSE SPLASH ────────────────────────────────────────────────────────────
+ * Micro Eazy's on its own front door and chooser, where no lender has been
+ * picked and it would be false to show one — and anywhere at all for a browser
+ * that has never been handed to a lender, which is a first-time visitor about
+ * to be sent to /welcome. Everywhere else the lender's: their branded doors, and
+ * the whole signed-in app.
+ */
+function splashLivery(pathname: string): SplashLivery {
+  if (pathname === "/welcome" || pathname === "/lenders") return "platform";
+  if (LENDER_DOOR.test(pathname)) return "lender";
+  // The lender's home, /micromart, on a browser that has never been here: the
+  // URL itself names the lender, so it is their splash that checks the session
+  // and sends the customer on to /micromart or /micromart/signin.
+  const home = /^\/([a-z0-9-]+)\/?$/.exec(pathname);
+  if (home && isLenderSlug(home[1])) return "lender";
+  return hasChosenLender() ? "lender" : "platform";
+}
+
+/**
+ * ── A BRANDED URL SETS THE BRAND ────────────────────────────────────────────
+ * The first path segment of /micromart/signin names the lender. This element is
+ * where that becomes true for the rest of the app: the store, the API slug and
+ * the palette are all set from it, BEFORE the screen under it renders.
+ *
+ * A segment that is not a lender is not a lender page. It renders the not-found
+ * screen rather than painting some default brand onto a mistyped URL.
+ */
+function LenderRoute({ children }: { children: ReactNode }) {
+  const { slug = "" } = useParams();
+  if (!isLenderSlug(slug)) return <Placeholder title="Not found" />;
+  // A lender on the LMS that is NOT open to borrowers yet — shown on the chooser,
+  // locked. Its URLs exist in shape (/axe/signin) but must not render a working-
+  // looking door: the sign-in behind it talks to a bridge that lender does not
+  // have, so a customer would type a password into a page that can only fail.
+  // Back to the front door, which is where their choices are.
+  if (!lenderBySlug(slug)?.available) return <Navigate to="/welcome" replace />;
+  // During render, not in an effect — see the note on LenderThemeProvider in
+  // lib/lender.tsx about the one frame of wrong colour an effect costs. It is
+  // idempotent, and only notifies subscribers when the slug actually changes.
+  setLenderSlug(slug);
+  return <>{children}</>;
+}
+
+/** `/` for somebody signed in is their lender's home, `/<slug>`. */
+function RootRedirect() {
+  const lender = useLender();
+  return <Navigate to={`/${lender.slug}`} replace />;
+}
+
+/** Sends the retired unbranded /signin to the current lender's own door,
+ *  carrying any route state (a prefilled phone) along with it. */
+function LegacySignIn() {
+  const lender = useLender();
+  const location = useLocation();
+  return <Navigate to={`/${lender.slug}/signin`} replace state={location.state} />;
+}
 
 /**
  * ── THE GUARD ───────────────────────────────────────────────────────────────
@@ -77,6 +153,7 @@ const FOCUSED = ["/welcome", "/verify", "/signin"];
 function RequireSession({ children }: { children: ReactNode }) {
   const { status } = useSession();
   const { pathname } = useLocation();
+  const lender = useLender();
 
   // "unknown" never reaches here any more: Shell holds the boot splash over the
   // whole app until the session question has an answer, so a route element
@@ -87,7 +164,16 @@ function RequireSession({ children }: { children: ReactNode }) {
 
   // `state` carries where they were going, so an expired session resumes at the
   // screen they wanted rather than dumping everyone on the home tab.
-  if (status === "anonymous") return <Navigate to="/welcome" replace state={{ from: pathname }} />;
+  //
+  // WHOSE door. A browser that has been handed to a lender — it signed in there,
+  // or picked them — goes back to THAT lender's sign-in page, in their colours.
+  // Only a browser that never has goes to Micro Eazy's front door. Sending a
+  // Micromart customer whose hour ran out to a generic "Welcome." with a lender
+  // chooser on it would be asking them who they borrow from all over again.
+  if (status === "anonymous") {
+    const door = hasChosenLender() ? `/${lender.slug}/signin` : "/welcome";
+    return <Navigate to={door} replace state={{ from: pathname }} />;
+  }
 
   return <>{children}</>;
 }
@@ -132,7 +218,7 @@ function Shell() {
   // it. `unknown` counts as cannot — it is not yet a no, but offering navigation
   // on the strength of a question that has not been answered is how an app shows
   // somebody a door that is locked.
-  const focused = FOCUSED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const focused = isPublicDoor(pathname);
   const chrome = !focused && status === "verified";
 
   // ── THE FRONT-OF-HOUSE SCREENS OWN THE VIEWPORT ──────────────────────────
@@ -145,7 +231,7 @@ function Shell() {
   // Onboarding and everything behind the session still take the measured
   // column: they are reading surfaces, and a 1440px line of body text is
   // unreadable.
-  const bleed = ["/welcome", "/signin", "/verify"].includes(pathname);
+  const bleed = isPublicDoor(pathname);
 
   return (
     <div className="min-h-full">
@@ -155,7 +241,7 @@ function Shell() {
           find it dressed the next time they sign in, not only once they are
           past the gate. */}
       <Wallpaper />
-      {booting && <Splash />}
+      {booting && <Splash livery={splashLivery(pathname)} />}
 
       <Frame chrome={chrome} bleed={bleed}>
           <Routes>
@@ -168,19 +254,43 @@ function Shell() {
                 book will use: the password already sitting in their SMS inbox.
                 It mints the same cookie as the code, so everything behind it is
                 identical — see screens/SignInPassword.tsx. */}
-            <Route path="/signin" element={<SignInPassword />} />
+            {/* The old unbranded password door. Anything still pointing at it —
+                a bookmark, an SMS from before the lender doors existed — lands on
+                the lender's own sign-in instead. */}
+            <Route path="/signin" element={<LegacySignIn />} />
+
+            {/* ── THE HANDOVER ───────────────────────────────────────────────
+                /welcome → /lenders → /<slug>/verify → /<slug>/signin → /<slug>.
+                The chooser is the last Micro Eazy screen; everything after it
+                wears the lender. */}
+            <Route path="/lenders" element={<LenderChoice />} />
+            <Route path="/:slug/verify" element={<LenderRoute><LenderVerify /></LenderRoute>} />
+            <Route path="/:slug/signin" element={<LenderRoute><SignInPassword /></LenderRoute>} />
+            <Route path="/:slug/welcome" element={<LenderRoute><LenderWelcome /></LenderRoute>} />
 
             {/* Home reads ONE endpoint, not four. It asks what can I borrow,
                 what do I owe, has anyone told me anything, and is anything of
                 mine in flight — and four round trips on the screen the app is
                 judged on in four seconds is the difference between instant and
                 assembling itself while somebody watches. */}
+            <Route path="/" element={<RequireSession><RootRedirect /></RequireSession>} />
+            {/* THE LENDER'S HOME — /micromart. Static routes like /messages and
+                /track rank above this dynamic one, so it only ever catches a
+                single segment nothing else claimed, and LenderRoute renders
+                not-found for one that is not a lender.
+
+                `splash` holds the lender's full-screen loader until the account
+                has actually arrived, rather than a spinner in an empty card —
+                this is the first thing a customer sees straight out of signing
+                in, and on a cold server the aggregate behind it takes a while. */}
             <Route
-              path="/"
+              path="/:slug"
               element={
+                <LenderRoute>
                 <RequireSession>
                   <Resource
                     title="Home"
+                    splash
                     load={home}
                     emptyWhen={(d) =>
                       !d.found
@@ -191,6 +301,7 @@ function Shell() {
                     {(d, reload) => <Home data={d} onRefresh={reload} />}
                   </Resource>
                 </RequireSession>
+                </LenderRoute>
               }
             />
             {/* Onboarding is gated too. A person reaches it only after a code
@@ -331,6 +442,9 @@ function Shell() {
 export default function App() {
   return (
     <ThemeProvider>
+      {/* Outside the router: the lender's palette has to be on <html> before the
+          boot splash paints, and the splash renders before any route does. */}
+      <LenderThemeProvider>
       <BrowserRouter>
         {/* Inside the router on purpose: the session needs to be readable by the
             guard, and the guard is a route element. Outside it, the provider
@@ -339,6 +453,7 @@ export default function App() {
           <Shell />
         </SessionProvider>
       </BrowserRouter>
+      </LenderThemeProvider>
     </ThemeProvider>
   );
 }

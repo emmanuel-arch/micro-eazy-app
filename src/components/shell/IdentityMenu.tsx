@@ -111,7 +111,7 @@ export function IdentityMenu({
       >
         <span
           className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
-          style={{ background: "var(--navy)" }}
+          style={{ background: "var(--brand)" }}
         >
           {(firstName?.[0] ?? "•").toUpperCase()}
         </span>

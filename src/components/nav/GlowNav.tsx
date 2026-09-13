@@ -20,6 +20,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
+import { useLender } from "../../lib/lender";
 import {
   Home, Wallet, Gauge, FileText, User, MessageSquare, Route as RouteIcon,
   TrendingUp, ShieldCheck, ScanFace, type LucideIcon,
@@ -95,9 +96,12 @@ const spring = { type: "spring" as const, stiffness: 380, damping: 32 };
 
 function Item({ item, rail }: { item: NavItem; rail: boolean }) {
   const Icon = item.icon;
+  // Home is the lender home, /<slug> — linking to "/" would redirect there but
+  // never light up as active. Same resolution as the sidebar in AppShell.
+  const lender = useLender();
   return (
     <NavLink
-      to={item.to}
+      to={item.to === "/" ? "/" + lender.slug : item.to}
       end={item.to === "/"}
       className={({ isActive }) =>
         `group relative flex ${rail ? "w-full flex-row items-center gap-3 rounded-2xl px-3.5 py-3" : "flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2"} ` +

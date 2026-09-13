@@ -10,22 +10,21 @@
 // looks like a bank.
 //
 // ── IT GOES SIDEWAYS NOW, NOT DOWN ──────────────────────────────────────────
-// On a laptop this screen is a DECK of three panes inside a fixed frame (see
+// On a laptop this screen is a DECK of two panes inside a fixed frame (see
 // components/shell/Deck.tsx and the landscape note in AppShell). It does not
 // scroll. Everything a customer opened the app for is in the first pane, on
 // screen, with the legal footer under it; the rest is one flick of the wheel
 // sideways, in the same rectangle at the same size.
 //
-// The three panes are three QUESTIONS, which is the same ordering principle the
-// single column used — it is only the axis that changed:
+// The panes are QUESTIONS, which is the same ordering principle the single
+// column used — it is only the axis that changed:
 //
-//   1. YOUR MONEY    What can I get, what do I owe, what is due, who wrote to me.
-//   2. WHAT NEXT     What can I do right now, and what does the lender think of
-//                    me. (Anything blocking — an unverified ID, an application
-//                    mid-flight — is promoted into pane 1, because a customer
-//                    whose next action is "finish your ID" must not have to go
-//                    looking for that.)
-//   3. ADVICE        The things worth reading when nothing needs doing.
+//   1. YOUR MONEY     What can I get, why, what do I owe, what is due, who wrote
+//                     to me — and anything blocking (an unverified ID, an
+//                     application mid-flight), because a customer whose next
+//                     action is "finish your ID" must not have to go looking.
+//   2. YOUR STANDING  The score and what moved it, the schedule, and the things
+//                     worth reading when nothing needs doing.
 //
 // On a phone the deck is a plain vertical stack in exactly that order, so the
 // handset layout is unchanged and still the design target.
@@ -139,7 +138,7 @@ export default function Home({
 
   // ── THE POSITION ──────────────────────────────────────────────────────────
   const money = (
-    <section className="card p-5">
+    <section className="card p-5 lg:p-4">
       {bookDown ? (
         <div className="flex items-start gap-3">
           <span
@@ -263,7 +262,11 @@ export default function Home({
               className="h-full rounded-full transition-[width] duration-700"
               style={{
                 width: `${Math.max(used * 100, data.outstanding > 0 ? 6 : 0)}%`,
-                background: "linear-gradient(90deg, var(--green), var(--lime))",
+                // --brand-ink, not --brand: a lender accent is chosen to be read
+                // on white, and Micromart's brown on the dark theme's track was a
+                // bar nobody could see. --brand-ink is the accent in the light
+                // theme and the accent lifted to 5:1 in the dark one.
+                background: "var(--brand-ink)",
               }}
             />
           </div>
@@ -281,7 +284,7 @@ export default function Home({
                 is the same error as showing an outage as a cleared balance. */}
             <div className="rounded-xl p-3" style={{ background: "var(--surface-sunk)" }}>
               <div className="flex items-center gap-1.5">
-                <PiggyBank className="h-3.5 w-3.5 shrink-0" strokeWidth={2.3} style={{ color: "var(--green-ink)" }} />
+                <PiggyBank className="h-3.5 w-3.5 shrink-0" strokeWidth={2.3} style={{ color: "var(--brand-ink)" }} />
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-faint">Savings</p>
               </div>
               <p className="tnum mt-1 text-[19px] font-bold leading-none tracking-[-0.02em]">
@@ -361,10 +364,10 @@ export default function Home({
   // is where that promise is kept — so it now sits on the first pane, one line
   // below the limit it is explaining. Number, then why.
   const whyLimit = (
-    <Link to="/score" className="card flex w-full items-center gap-3 p-4 text-left">
+    <Link to="/score" className="card flex w-full items-center gap-3 p-4 text-left lg:py-3">
       <span
         className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-        style={{ background: "color-mix(in oklab, var(--navy) 12%, transparent)", color: "var(--navy-ink)" }}
+        style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
       >
         <Gauge className="h-[18px] w-[18px]" strokeWidth={2.2} />
       </span>
@@ -392,7 +395,7 @@ export default function Home({
   const prompts = (
     <>
       {data.kycStatus !== "VERIFIED" && data.kycStatus !== "NONE" && (
-        <Link to="/identity" className="card flex w-full items-center gap-3 p-4 text-left">
+        <Link to="/identity" className="card flex w-full items-center gap-3 p-4 text-left lg:py-3">
           <span
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
             style={{ background: "color-mix(in oklab, #818cf8 18%, transparent)", color: "#4f46e5" }}
@@ -414,10 +417,10 @@ export default function Home({
       )}
 
       {data.application && (
-        <Link to="/track" className="card flex w-full items-center gap-3 p-4 text-left">
+        <Link to="/track" className="card flex w-full items-center gap-3 p-4 text-left lg:py-3">
           <span
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-            style={{ background: "color-mix(in oklab, var(--lime) 22%, transparent)", color: "var(--green-ink)" }}
+            style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
           >
             <RouteIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
           </span>
@@ -447,20 +450,32 @@ export default function Home({
   const actions = (
     <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {ACTIONS.map((a) => (
+        // ── ON A LAPTOP: ICON AND LABEL ON ONE LINE, THE NOTE UNDER BOTH ────
+        // Stacked icon-over-label-over-note was ~110px tall, and with the pager
+        // now on its own row above the footer that was the difference between
+        // Home fitting a 1440×900 MacBook's ~790px viewport and not. Icon and
+        // label share a row (a 146px tile has the width for "Statements" beside
+        // a 32px chip), and the note runs the full tile width underneath, where
+        // "Decision in minutes" fits on one line — ~78px, no wording lost.
         <Link
           key={a.label}
           to={a.to}
-          className="card group flex items-start gap-3 p-4 text-left transition-transform duration-200 active:scale-[0.985] lg:flex-col lg:gap-2 lg:p-3.5"
+          className="card group flex items-start gap-3 p-4 text-left transition-transform duration-200 active:scale-[0.985] lg:grid lg:grid-cols-[32px_minmax(0,1fr)] lg:items-center lg:gap-x-2 lg:gap-y-1.5 lg:p-3"
         >
           <span
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl lg:h-8 lg:w-8 lg:rounded-lg"
             style={{ background: `color-mix(in oklab, ${a.tint} 16%, transparent)`, color: a.tint }}
           >
-            <a.icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            <a.icon className="h-[18px] w-[18px] lg:h-4 lg:w-4" strokeWidth={2.2} />
           </span>
-          <span className="min-w-0">
-            <span className="block text-[14px] font-semibold leading-tight">{a.label}</span>
-            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">{a.note}</span>
+          {/* `lg:contents` dissolves this wrapper into the tile's grid, so the
+              label takes the cell beside the icon and the note can span both
+              columns below — without a second copy of the markup for laptops. */}
+          <span className="min-w-0 lg:contents">
+            <span className="block truncate text-[14px] font-semibold leading-tight">{a.label}</span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint lg:col-span-2 lg:mt-0 lg:truncate">
+              {a.note}
+            </span>
           </span>
         </Link>
       ))}
@@ -554,7 +569,7 @@ export default function Home({
         <span className="tnum text-[11.5px] text-ink-faint">
           {data.schedule.filter((s) => s.status === "PAID").length} of {data.schedule.length} paid
         </span>
-        <Link to="/repay" className="text-[12px] font-semibold" style={{ color: "var(--green-ink)" }}>
+        <Link to="/repay" className="text-[12px] font-semibold" style={{ color: "var(--brand-ink)" }}>
           See all
         </Link>
       </div>
@@ -666,7 +681,7 @@ export default function Home({
         {data.unreadMessages > 0 && (
           <span
             className="rounded-full px-2 py-0.5 text-[10.5px] font-bold"
-            style={{ background: "color-mix(in oklab, var(--lime) 24%, transparent)", color: "var(--green-ink)" }}
+            style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
           >
             {data.unreadMessages} new
           </span>
@@ -691,7 +706,7 @@ export default function Home({
                 <span
                   aria-hidden
                   className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: m.unread ? "var(--green-ink)" : "transparent" }}
+                  style={{ background: m.unread ? "var(--brand-ink)" : "transparent" }}
                 />
                 <span className="min-w-0">
                   <span className="flex items-baseline gap-2">
@@ -735,7 +750,7 @@ export default function Home({
           control and a redundant label taking 34px of a fixed height budget. */}
       <div className="mb-2.5 flex items-baseline justify-between gap-3 px-1 lg:hidden">
         <h2 className="text-[15px] font-bold tracking-[-0.015em]">Advice and tips</h2>
-        <button className="text-[12.5px] font-semibold" style={{ color: "var(--green-ink)" }}>
+        <button className="text-[12.5px] font-semibold" style={{ color: "var(--brand-ink)" }}>
           View all
         </button>
       </div>
@@ -834,7 +849,7 @@ export default function Home({
     <div className="flex flex-col lg:h-full lg:min-h-0">
       <div className="shrink-0">
         <Sky title={data.firstName ? `Hello, ${data.firstName}` : "Hello"}>
-          <p className="max-w-[34ch] text-[13px] leading-relaxed text-sky-ink-soft">
+          <p className="max-w-[34ch] text-[13px] leading-relaxed text-sky-ink-soft lg:max-w-none">
             Your limit is reviewed every time you repay. Nothing here is decided by a person.
           </p>
         </Sky>
