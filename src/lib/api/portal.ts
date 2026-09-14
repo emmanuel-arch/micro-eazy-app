@@ -1074,13 +1074,325 @@ export const apply = (args: {
   productId: string;
   amount: number;
   nationalId?: string;
+  /** The repayment period the customer chose, in the product's own unit. */
+  termCount?: number;
+  /** Their reshaped plan. Kept by the server only if it sums to its own total. */
+  schedule?: { seq: number; dueDate: string; amount: number }[];
+  agreement?: { accepted: boolean; version: string; crbConsent: boolean };
   lat?: number;
   lng?: number;
 }) =>
-  apiFetch<ApplyResponse>(
+  apiFetch<ApplyResponse & ApplyPlacement>(
     "/api/portal/apply",
     { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), ...args }) },
     { auth: true },
+  );
+
+/** Where the application landed in the lender's own workflow, and at what price. */
+export interface ApplyPlacement {
+  stage?: { title: string; index: number; of: number; stages: string[] };
+  plan?: PricedPlan;
+}
+
+export interface PricedPlan {
+  principal: number;
+  termCount: number;
+  termUnit: string;
+  ratePerPeriod: number;
+  totalRatePct: number;
+  interest: number;
+  fees: { code: string; name: string; when: ChargeWhen; amount: number }[];
+  upfront: number;
+  deducted: number;
+  spread: number;
+  netDisbursed: number;
+  totalRepayable: number;
+  installments: { seq: number; amount: number }[];
+}
+
+export type ChargeWhen = "before-disbursement" | "on-disbursement" | "on-repayment";
+
+// ── The front-door pre-check ─────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/precheck/route.ts
+//
+// Asked BEFORE a code is sent. The answer is a ROUTE, never a sentence to render
+// as an error: each one sends the customer somewhere that can actually serve them.
+
+export type PrecheckAnswer =
+  | { success: true; route: "new" | "local" | "fintech"; lender: string }
+  | { success: true; route: "africa-active" | "africa-portal"; lender: string; portalUrl: string }
+  | { success: true; route: "africa-pipeline"; lender: string; portalUrl: string; eligibleOn: string | null; daysRemaining: number | null }
+  | { success: true; route: "both"; lender: string; caseRef: string; support: { phone: string; email: string } }
+  | { success: true; route: "unreachable"; lender: string; message: string };
+
+export const precheck = (phone: string) =>
+  apiFetch<PrecheckAnswer>(
+    "/api/portal/precheck",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), phone }) },
+    { auth: false, idempotent: true },
+  );
+
+// ── The lender's onboarding rules, and where I stand ─────────────────────────
+// connected-suite/src/app/api/portal/journey/route.ts — the SAME onboarding
+// contract the console counter renders, for the "portal" channel.
+
+export type OnboardingMethod = "iprs" | "ocr" | "crb" | "manual";
+export type KycFieldKey =
+  | "firstName" | "otherName" | "dob" | "gender" | "nationalId" | "phone" | "email"
+  | "postalAddress" | "physicalAddress" | "occupation" | "businessName" | "nextOfKin";
+
+export interface ContractField { key: KycFieldKey; label: string; help: string; required: boolean; verified: boolean; unique: boolean }
+
+/** A lender's own extra question (connected-suite/src/lib/config/details.ts). */
+export interface DetailItem {
+  code: string;
+  title: string;
+  description: string;
+  type: "text" | "textarea" | "numeric" | "currency" | "tel" | "email" | "radio" | "checkbox" | "dropdown" | "date" | "time" | "month" | "year" | "boolean";
+  options: string[];
+  required: boolean;
+  min: number | null;
+  max: number | null;
+  pattern: string;
+  placeholder: string;
+}
+
+export interface OnboardingContract {
+  primary: OnboardingMethod;
+  methods: { key: OnboardingMethod; label: string; blurb: string; ready: boolean }[];
+  allowFallback: boolean;
+  allowManualOverride: boolean;
+  requireConsent: boolean;
+  fields: ContractField[];
+  idDocument: "national_id" | "passport" | "either";
+  ocr: { capture: "front" | "both"; allowEdit: boolean };
+  selfie: { required: boolean; liveness: boolean };
+  geo: { ask: boolean; required: boolean; places: ("business" | "home")[] };
+  documents: { code: string; name: string; description: string; accept: string; multiple: boolean; maxSizeMb: number; parsed: boolean }[];
+  detailGroups: { code: string; title: string; description: string; items: DetailItem[] }[];
+  age: { min: number; max: number } | null;
+  joiningFee: { amount: number } | null;
+  automatedChecks: string[];
+  enabled: boolean;
+  flags: {
+    faceMatch: boolean;
+    liveness: boolean;
+    requireReview: boolean;
+    referees: { min: number; max: number } | null;
+    onDuplicate: "block" | "warn" | "open_existing";
+    idPhotoRequired: boolean;
+    oneActiveLoan: boolean;
+    requireGeoPin: boolean;
+    maxLimit: number;
+    minScoreToBorrow: number;
+  };
+  capabilities: { ocr: "live" | "simulation"; registry: "live" | "simulation"; face: "live" | "simulation" };
+}
+
+export interface JourneyStatus {
+  borrower: {
+    id: string; firstName: string | null; otherName: string | null; nationalId: string | null;
+    dob: string | null; gender: string | null; email: string | null; kycStatus: KycState;
+    loanLimit: number | null; creditScore: number | null; hasGeo: boolean;
+    /** Linked to a record on the lender's own book — identified there, limit held there. */
+    lenderLinked?: boolean;
+  } | null;
+  kyc: {
+    sessionId: string; status: string; nationalId: string | null; name: string | null;
+    idRead: boolean; registry: boolean | null; selfie: boolean; liveness: boolean | null; flags: string[];
+  } | null;
+  crunch: { at: string; score: number; band: string | null; startingLimit: number | null; eligible: boolean; fresh: boolean } | null;
+  crb: { at: string; score: number | null; verdict: string | null; band: string | null } | null;
+  application: { id: string; status: string; stageTitle: string | null; amount: number; product: string | null } | null;
+  activeLoan: boolean;
+  crbRequired: boolean;
+  next: "kyc" | "crunch" | "apply" | "track";
+}
+
+export interface JourneyResponse {
+  success: boolean;
+  lender: string;
+  contract: OnboardingContract;
+  status: JourneyStatus;
+  existingCustomer: boolean;
+}
+
+export const journey = () =>
+  apiFetch<JourneyResponse>(
+    `/api/portal/journey?lenderSlug=${encodeURIComponent(lenderSlug())}`,
+    {},
+    { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
+  );
+
+// ── The identity steps beyond the card ───────────────────────────────────────
+
+const kycStep = <T,>(step: string, payload: Record<string, unknown>, extra: Record<string, unknown> = {}, timeoutMs = 45_000) =>
+  apiFetch<T & { success: boolean; sessionId?: string; message?: string; retake?: boolean }>(
+    "/api/portal/kyc",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), step, payload, ...extra }) },
+    { auth: true, timeoutMs },
+  );
+
+export const registryLookup = (nationalId: string, sessionId: string | undefined, consent: boolean) =>
+  kycStep<{ iprs?: { matched: boolean; engine: string; name: string | null; dob: string | null; gender: string | null; note: string } }>(
+    "iprs-lookup", { consent }, { nationalId, ...(sessionId ? { sessionId } : {}) },
+  );
+
+export const readIdBack = (image: string, sessionId: string | undefined, signals: { bytes: number; brightness: number; blurVar: number }) =>
+  kycStep<{ stored?: boolean; quality?: { score: number; passed: boolean; issues: string[] } }>(
+    "id-back", { image, ...signals }, sessionId ? { sessionId } : {},
+  );
+
+export interface FaceMatchResult {
+  faceMatch?: { score: number; passed: boolean; band: "match" | "review" | "no-match"; engine: string; summary: string };
+}
+
+export const matchSelfie = (image: string, sessionId: string | undefined, bytes: number) =>
+  kycStep<FaceMatchResult>("facematch", { image, bytes }, sessionId ? { sessionId } : {});
+
+export const livenessChallenges = (sessionId: string | undefined) =>
+  kycStep<{ challenges?: { key: string; say: string; hint: string }[] }>("liveness-challenges", {}, sessionId ? { sessionId } : {}, 20_000);
+
+export const submitLiveness = (sessionId: string | undefined, frames: { challenge: string; image: string; bytes: number }[]) =>
+  kycStep<{ liveness?: { passed: boolean; engine: string; frames: { challenge: string; passed: boolean; says: string | null }[] } }>(
+    "liveness", { frames }, sessionId ? { sessionId } : {}, 60_000,
+  );
+
+export interface KycFinal {
+  status?: "VERIFIED" | "PENDING_REVIEW" | "FAILED";
+  flags?: string[];
+  reasons?: { key: string; says: string; fixable: boolean }[];
+  retakeable?: boolean;
+  maxRetakes?: number;
+  conversationId?: string | null;
+}
+
+export const finalizeKyc = (sessionId: string | undefined, nationalId?: string) =>
+  kycStep<KycFinal>("finalize", {}, { ...(sessionId ? { sessionId } : {}), ...(nationalId ? { nationalId } : {}) }, 30_000);
+
+// ── Registering, under the contract ──────────────────────────────────────────
+// connected-suite/src/app/api/portal/register/route.ts
+
+export interface RegisterBody {
+  firstName?: string; otherName?: string; nationalId?: string; dob?: string; gender?: string; email?: string;
+  occupation?: string; businessName?: string; postalAddress?: string; physicalAddress?: string;
+  nextOfKin?: { name: string; phone: string; relationship?: string } | null;
+  referees?: { name: string; phone: string; relationship?: string }[];
+  details?: Record<string, unknown>;
+  geo?: { consent: boolean; business?: GeoPin | null; home?: GeoPin | null };
+  onboardingMethod?: string;
+  consent?: Record<string, boolean>;
+}
+export type GeoPin = { lat: number; lng: number; accuracy?: number; address?: string };
+
+export const register = (body: RegisterBody) =>
+  apiFetch<{ success: boolean; borrowerId: string; created: boolean; warnings: string[]; message?: string }>(
+    "/api/portal/register",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), ...body }) },
+    { auth: true, timeoutMs: 30_000 },
+  );
+
+// ── The statement ────────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/crunch/route.ts
+
+export interface CrunchReason { code: string; factor: string; points: number; direction: "up" | "down"; detail: string }
+export interface DecisionReason { code: string; label: string; detail: string; tone: "up" | "down" | "neutral" }
+
+export interface CrunchResult {
+  success: true;
+  nameCheck: { statementName: string | null; expectedName: string | null; matched: boolean; unreadable: boolean };
+  transactionCount: number;
+  paidIn: number;
+  paidOut: number;
+  creditScore: {
+    modelVersion: string; score: number; maxScore: number; pd: number; pdPercent: string;
+    band: string; tone: "good" | "warn" | "high" | "bad"; decision: string;
+    reasonCodes: CrunchReason[]; breakdown: { code: string; factor: string; points: number }[];
+  };
+  features: {
+    monthsCovered: number; periodStart: string | null; periodEnd: string | null;
+    avgMonthlyIncome: number; avgMonthlyExpense: number; avgMonthlyNet: number; avgBalance: number; closingBalance: number;
+    incomeVolatility: number; incomeMonthsRatio: number; gamblingRatio: number; gamblingOutflow: number;
+    loanDependencyRatio: number; loanEventCount: number; [k: string]: unknown;
+  };
+  monthly: { month: string; income: number; expense: number; net: number; gambling: number }[];
+  affordability: { score: number; band: string; recommendedMaxInstallment: number; reasons: { factor: string; direction: string; detail: string }[] };
+  report: {
+    spendByCategory: { category: string; amount: number; count: number; share: number }[];
+    topMerchants: { name: string; category: string; amount: number; count: number }[];
+    loanBehaviour: { lenders: { name: string; borrowed: number; repaid: number; events: number }[]; repaymentCadence: string; fulizaReliant: boolean };
+    lifestyle: { tags: string[]; narrative: string };
+    highlights: { tone: "positive" | "watch" | "negative"; label: string; detail: string }[];
+  } | null;
+  categories: { category: string; count: number; amount: number; inAmt: number; outAmt: number }[];
+  sample: { date: string; details: string; direction: "in" | "out"; amount: number; category: string }[];
+  qualification: {
+    eligible: boolean;
+    startingLimit: number;
+    internalScore: number;
+    scoreBand: string;
+    tier: string | null;
+    ceilings: { score: number; affordability: number; boundBy: "score" | "affordability" | "both" };
+    cappedByLender: boolean;
+    monthlyCapacity: number;
+    reasonCodes: DecisionReason[];
+    declineReasons: string[];
+    products: { productId: string; name: string; termCount: number; termUnit: string; interestPct: number; principal: number; installment: number; totalRepayable: number; affordable: boolean; recommended: boolean }[];
+    policyVersion: number;
+  };
+  saved: { snapshotId: string; limitAllocated: number | null };
+}
+
+export type CrunchRefusal = {
+  success: false;
+  nameMismatch?: boolean;
+  statementName?: string;
+  expectedName?: string;
+  needPassword?: boolean;
+  reason?: string;
+  field?: string;
+  message: string;
+};
+
+/** Multipart, not JSON — a statement is a file. Never retried: each run is billed. */
+export async function crunchStatement(file: File, password: string): Promise<CrunchResult | CrunchRefusal> {
+  const fd = new FormData();
+  fd.append("lenderSlug", lenderSlug());
+  fd.append("file", file);
+  if (password.trim()) fd.append("password", password.trim());
+  try {
+    return await apiFetch<CrunchResult | CrunchRefusal>("/api/portal/crunch", { method: "POST", body: fd }, { auth: true, timeoutMs: 90_000 });
+  } catch (e) {
+    const body = (e as { body?: unknown })?.body;
+    if (body && typeof body === "object" && "message" in body) return body as CrunchRefusal;
+    throw e;
+  }
+}
+
+export const escalateStatementName = (statementName: string, reason: string) =>
+  apiFetch<{ success: boolean; threadId: string; caseRef: string; message?: string }>(
+    "/api/portal/crunch/escalate",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), statementName, reason }) },
+    { auth: true },
+  );
+
+// ── The bureau ───────────────────────────────────────────────────────────────
+// connected-suite/src/app/api/portal/crb/route.ts — never re-bought inside 30 days.
+
+export interface BureauReport {
+  bureau: string; reference: string; checkedAt: string; score: number;
+  band: "Excellent" | "Good" | "Fair" | "Poor"; probabilityOfDefault: number;
+  accounts: { total: number; active: number; closed: number; npl: number };
+  totalExposure: number; worstArrearsDays: number; enquiriesLast6m: number;
+  negativeListings: { lender: string; amount: number; status: string; since: string }[];
+  verdict: "CLEAR" | "CAUTION" | "ADVERSE"; summary: string; mode: "live" | "simulation"; sandbox?: boolean;
+}
+
+export const runCreditCheck = (consent: boolean, loanAmount?: number) =>
+  apiFetch<{ success: boolean; reused: boolean; checkedAt: string; report: BureauReport | null; message?: string }>(
+    "/api/portal/crb",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), consent, ...(loanAmount ? { loanAmount } : {}) }) },
+    { auth: true, timeoutMs: 60_000 },
   );
 
 // ── The identity check, and the human behind it ──────────────────────────────
@@ -1152,8 +1464,15 @@ export const kycStatus = () =>
 // returns 30000 — and it is passed through labelled rather than rendered against
 // a 900 denominator, which would be nonsense on its face.
 
-/** Whose book answered. NOT cosmetic — see the note on the Home screen. */
-export type BookSource = "native" | "lender" | "unavailable";
+/**
+ * Whose book answered. NOT cosmetic — see the note on the Home screen.
+ * "onboarding" is a bridged customer the lender's book does not hold yet: the
+ * figures are ours (a cruncher-assigned limit, nothing owed), and true.
+ */
+export type BookSource = "native" | "lender" | "onboarding" | "unavailable";
+
+/** Why the book is unavailable — each one is a different sentence. */
+export type BookIssue = "unreachable" | "ambiguous" | "mismatch";
 
 export interface HomeResponse {
   success: boolean;
@@ -1168,6 +1487,8 @@ export interface HomeResponse {
    * as the second tells a customer in arrears that they are clear.
    */
   bookSource: BookSource;
+  /** Set only when `bookSource` is "unavailable". Absent on older servers. */
+  bookIssue?: BookIssue | null;
   limit: number;
   outstanding: number;
   available: number;

@@ -20,7 +20,11 @@
 //   /preview.html?screen=join             the lender's create-account door
 //   /preview.html?screen=splash           the lender's loading screen
 //   /preview.html?screen=splash-platform  Micro Eazy's loading screen
+//   /preview.html?screen=kyc              KYC verification, on canned answers
+//   /preview.html?screen=crunch           the statement cruncher
+//   /preview.html?screen=apply            Apply now
 //
+//   &drive=<script>  clicks through to a later pane — see preview-mocks.ts
 //   &theme=dark   &wallpaper=none   &pane=1
 //
 // Delete it freely. It holds no state anything else depends on.
@@ -40,7 +44,11 @@ import LenderChoice from "./screens/LenderChoice";
 import LenderVerify from "./screens/LenderVerify";
 import LenderWelcome from "./screens/LenderWelcome";
 import SignInPassword from "./screens/SignInPassword";
+import Kyc from "./screens/kyc/Kyc";
+import Cruncher from "./screens/crunch/Cruncher";
+import ApplyNow from "./screens/apply/ApplyNow";
 import { SAMPLE_HOME } from "./lib/api/samples";
+import { drive, installMocks } from "./preview-mocks";
 import "./styles/theme.css";
 
 function Tall() {
@@ -72,6 +80,9 @@ function AutoPick() {
 
 const params = new URLSearchParams(location.search);
 const screen = params.get("screen");
+installMocks(screen ?? "home");
+const script = params.get("drive");
+if (script) void drive(script);
 const PHONE = { phone: "0758517032" };
 
 const DOORS: Record<string, { path: string; entry: string; element: React.ReactNode; state?: unknown }> = {
@@ -106,12 +117,13 @@ function Body() {
   }
 
   setLenderSlug("micromart");
+  const flow = screen === "kyc" ? <Kyc /> : screen === "crunch" ? <Cruncher /> : screen === "apply" ? <ApplyNow /> : null;
   return (
     <BrowserRouter>
       <SessionProvider>
         <div className="min-h-full">
           <Wallpaper />
-          <AppShell>{screen === "tall" ? <Tall /> : <Home data={SAMPLE_HOME} />}</AppShell>
+          <AppShell>{flow ?? (screen === "tall" ? <Tall /> : <Home data={SAMPLE_HOME} />)}</AppShell>
           <GlowTabs />
         </div>
       </SessionProvider>

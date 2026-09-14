@@ -275,7 +275,11 @@ export async function apiFetch<T = unknown>(
 
     try {
       const headers = new Headers(init.headers);
-      if (!headers.has("Content-Type") && init.body) headers.set("Content-Type", "application/json");
+      // A multipart upload (the statement PDF) sets its own boundary header; forcing
+      // JSON on it would make the server read a file as an unparseable string.
+      if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
+        headers.set("Content-Type", "application/json");
+      }
       if (bearer && !ch.carriesCookie) headers.set("Authorization", `Bearer ${bearer}`);
       if (opts.idempotencyKey) headers.set("Idempotency-Key", opts.idempotencyKey);
 

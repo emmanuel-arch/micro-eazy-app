@@ -49,21 +49,67 @@ export interface Product {
   repaymentPeriod: number;
   repaymentUnit: string;
   minCreditScore: number | null;
-  disbursementMode?: string;
+  disbursementMode?: string | null;
+  /** The lender's product id, when the product lives on their book. */
+  serviceSuiteProductId?: number;
   /**
-   * The lender's own charges, when the catalogue carries them.
-   *
-   * KNOWN GAP, STATED RATHER THAN HIDDEN: /api/lms/products does not return the
-   * Charge rows today, so this is empty in practice and the screen says in words
-   * that fees are itemised on the agreement. It is typed here because a quote
-   * that omits a KSh 850 registration fee is the exact "cheap until you apply"
-   * pricing this product exists to stop being — the moment the endpoint returns
-   * them, the comparison picks them up with no screen change.
+   * The SHORTEST term this product books. A flat product may be repaid over any
+   * number of periods from here up to `repaymentPeriod`, and the customer
+   * chooses — see termOptions().
    */
-  charges?: { name: string; amount: number; when: ChargeWhen }[];
+  minRepaymentPeriod?: number;
+  /**
+   * The lender's own fee sheet — Micromart's ProductFees, read live by
+   * /api/lms/products. A 6% processing fee arrives with its KSh 650 floor and
+   * KSh 6,000 ceiling, exactly as their price list clamps it.
+   */
+  charges?: ShelfCharge[];
 }
 
 export type ChargeWhen = "before-disbursement" | "on-disbursement" | "on-repayment";
+
+export interface ShelfCharge {
+  code: string;
+  name: string;
+  when: ChargeWhen;
+  percent: boolean;
+  value: number;
+  min: number | null;
+  max: number | null;
+  fromPrincipal: number | null;
+  toPrincipal: number | null;
+  mandatory: boolean;
+}
+
+/** What one fee costs at a principal — the lender's own clamp, ported from the server. */
+export function priceCharge(c: ShelfCharge, principal: number): number {
+  if (!c.percent) return Math.round(c.value);
+  let v = (principal * c.value) / 100;
+  if (c.min != null && c.min > 0) v = Math.max(v, c.min);
+  if (c.max != null && c.max > 0) v = Math.min(v, c.max);
+  return Math.round(v);
+}
+
+/** The fees that apply at this principal. */
+export function chargesAt(p: Product, principal: number): { code: string; name: string; when: ChargeWhen; amount: number }[] {
+  return (p.charges ?? [])
+    .filter((c) => (c.fromPrincipal == null || principal >= c.fromPrincipal) && (c.toPrincipal == null || c.toPrincipal <= 0 || principal <= c.toPrincipal))
+    .map((c) => ({ code: c.code, name: c.name, when: c.when, amount: priceCharge(c, principal) }));
+}
+
+/** The repayment periods a customer may choose, shortest first. */
+export function termOptions(p: Product): number[] {
+  const max = Math.max(1, p.repaymentPeriod);
+  if (p.interestMethod !== "flat") return [max];
+  const min = Math.max(1, Math.min(max, p.minRepaymentPeriod ?? 1));
+  return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+}
+
+/** The rate for ONE repayment period — "8.25% a week" — whatever unit it was published in. */
+export function ratePerPeriod(p: Product): number {
+  if (p.interestUnit.toLowerCase() === "term") return p.interestRate / Math.max(1, p.repaymentPeriod);
+  return p.interestRate * (unitDays(p.repaymentUnit) / unitDays(p.interestUnit));
+}
 
 /** How many days a repayment unit is worth. A month is taken as 30 — good
  *  enough to restate a rate, never used to place a date (stepDate does that on
@@ -109,8 +155,21 @@ export interface Quote {
   /** The typical instalment — every row but the last, which carries the
    *  remainder. Shown as "about", because on most terms it is. */
   perPeriod: number;
-  /** Charges due before the money moves. Zero until the catalogue supplies them. */
+  /** Charges taken before or at disbursement (paid upfront + deducted). */
   upfrontCharges: number;
+  /** Every fee on the sheet at this principal, priced. */
+  fees: { code: string; name: string; when: ChargeWhen; amount: number }[];
+  /** Paid before the money moves. */
+  upfront: number;
+  /** Taken out of the principal that is sent. */
+  deducted: number;
+  /** Spread across the instalments, and inside `totalRepayable`. */
+  spread: number;
+  /** What actually lands on the customer's M-PESA. */
+  netDisbursed: number;
+  /** The rate for one period, and for the whole chosen term. */
+  ratePerPeriod: number;
+  totalRatePct: number;
   /** Integer cents, ready for the reshape editor without a second conversion. */
   rows: Row[];
   firstDueDate: string;
@@ -130,10 +189,18 @@ export interface Quote {
  * dates on a comparison screen indicative in the same way the money is — the
  * real first due date is set when the loan is booked.
  */
-export function quote(product: Product, principal: number, from: Date = new Date()): Quote {
-  const rate = wholeTermRate(product);
-  const count = Math.max(1, product.repaymentPeriod);
+export function quote(product: Product, principal: number, from: Date = new Date(), termCount?: number): Quote {
+  // ── THE CUSTOMER'S TERM ──────────────────────────────────────────────────
+  // A flat product's rate is per period, so a shorter term is proportionally
+  // cheaper: 8.25% a week over 5 weeks is 41.25%, not the 82.5% of the full ten.
+  // With no term given this is the product's full term, exactly as before.
+  const options = termOptions(product);
+  const count = termCount != null && options.includes(termCount) ? termCount : Math.max(1, product.repaymentPeriod);
+  const perPeriod = ratePerPeriod(product);
+  const rate = count === product.repaymentPeriod ? wholeTermRate(product) : round2(perPeriod * count);
   const unit = product.repaymentUnit;
+  const fees = chargesAt(product, principal);
+  const spread = fees.filter((f) => f.when === "on-repayment").reduce((n, f) => n + f.amount, 0);
 
   const amounts: number[] = [];
   let totalInterest: number;
@@ -157,7 +224,9 @@ export function quote(product: Product, principal: number, from: Date = new Date
     totalInterest = interestAcc;
   } else {
     totalInterest = round2(principal * (rate / 100));
-    const total = round2(principal + totalInterest);
+    // A fee "distributed on instalments" is repaid inside them, so it is part of
+    // the total the rows add up to — the same total the server prices.
+    const total = round2(principal + totalInterest + spread);
     const per = round2(total / count);
     let placed = 0;
     for (let i = 1; i <= count; i++) {
@@ -173,9 +242,8 @@ export function quote(product: Product, principal: number, from: Date = new Date
     cents: toCents(amountDue),
   }));
 
-  const upfrontCharges = (product.charges ?? [])
-    .filter((c) => c.when !== "on-repayment")
-    .reduce((n, c) => n + c.amount, 0);
+  const upfront = fees.filter((f) => f.when === "before-disbursement").reduce((n, f) => n + f.amount, 0);
+  const deducted = fees.filter((f) => f.when === "on-disbursement").reduce((n, f) => n + f.amount, 0);
 
   return {
     product,
@@ -184,9 +252,16 @@ export function quote(product: Product, principal: number, from: Date = new Date
     unit,
     method: product.interestMethod,
     totalInterest,
-    totalRepayable: round2(principal + totalInterest),
+    totalRepayable: round2(amounts.reduce((n, a) => n + a, 0)),
     perPeriod: amounts[0],
-    upfrontCharges,
+    upfrontCharges: upfront + deducted,
+    fees,
+    upfront,
+    deducted,
+    spread,
+    netDisbursed: round2(principal - deducted),
+    ratePerPeriod: round2(perPeriod),
+    totalRatePct: rate,
     rows,
     firstDueDate: rows[0].dueDate,
     clearDate: rows[rows.length - 1].dueDate,
@@ -234,7 +309,7 @@ export function affordableRange(p: Product, limit: number): { min: number; max: 
 import type { Offer } from "./api/portal";
 
 export function quoteToOffer(q: Quote, lender: string): Offer {
-  const charges = (q.product.charges ?? []).map((c) => ({ ...c }));
+  const charges = q.fees.map((f) => ({ name: f.name, amount: f.amount, when: f.when }));
   return {
     // Empty ON PURPOSE. See the header.
     id: "",
@@ -245,7 +320,7 @@ export function quoteToOffer(q: Quote, lender: string): Offer {
     // The agreement shows the WHOLE-TERM rate, because that is what a customer
     // is agreeing to pay in total — "8.25% a week" and "82.5% over ten weeks"
     // are the same price and only one of them reads as the real cost.
-    interestRate: wholeTermRate(q.product),
+    interestRate: q.totalRatePct,
     interestMethod: q.method,
     termCount: q.periods,
     termUnit: q.unit,

@@ -60,6 +60,8 @@ export default function SignInPassword() {
 
   // The front door hands the number over if the customer typed one there.
   const handed = (location.state as { phone?: string } | null)?.phone ?? "";
+  // ...and says why, when the create-account door found an account on this book.
+  const fromPrecheck = (location.state as { precheck?: string } | null)?.precheck === "fintech";
 
   const [phone, setPhone] = useState(handed);
   const [password, setPassword] = useState("");
@@ -158,12 +160,14 @@ export default function SignInPassword() {
     >
       <div>
         <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink lg:text-[30px]">
-          Welcome back.
+          {fromPrecheck ? "You already have an account." : "Welcome back."}
         </h1>
         {/* More air under the heading than the other doors have: this sentence is
             the one that tells a customer they are on the right lender's page. */}
         <p className="mt-4 max-w-[36ch] text-[14px] leading-relaxed text-ink-soft">
-          Enter the number your {lender.name} account is on. We take you through the rest.
+          {fromPrecheck
+            ? `Stay put — this number is already with ${lender.name}. Enter your password, or ask for a new one by SMS.`
+            : `Enter the number your ${lender.name} account is on. We take you through the rest.`}
         </p>
 
         <form onSubmit={submit} className="mt-7 space-y-4">

@@ -43,9 +43,9 @@
 // the design target; the deck is the adaptation, and it costs the phone one
 // wrapper div.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsRight, Lock } from "lucide-react";
 import { usePagerSlot } from "./chrome";
 import { ScrollVeil, useCutOff } from "./ScrollVeil";
 
@@ -57,10 +57,19 @@ export type Pane = {
   node: ReactNode;
 };
 
+// ── STEERING THE DECK FROM INSIDE A PANE ────────────────────────────────────
+// A card on one pane can point at another — Home's "Read more" on a tip opens
+// the help pane at that topic. On a laptop that is a slide; on a phone, where the
+// panes are stacked, it is a scroll to the pane. The card does not need to know
+// which.
+type DeckApi = { at: number; goTo: (target: string | number) => void };
+const DeckContext = createContext<DeckApi>({ at: 0, goTo: () => {} });
+export const useDeck = () => useContext(DeckContext);
+
 const DESKTOP = "(min-width: 1024px)";
 
 /** Whether the landscape rule is in force. The deck is inert below `lg`. */
-function useIsDesktop(): boolean {
+export function useIsDesktop(): boolean {
   const [on, setOn] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia(DESKTOP).matches,
   );
@@ -78,11 +87,30 @@ export function Deck({
   panes,
   /** Names the region for a screen reader — "Home, 3 panels" and so on. */
   label,
+  at: controlledAt,
+  onAt,
+  reachable,
+  mobile = "stack",
 }: {
   panes: Pane[];
   label: string;
+  /**
+   * ── A STEP-BY-STEP FLOW ──────────────────────────────────────────────────
+   * Given, the deck is CONTROLLED: the flow decides which pane is in view, and
+   * the pager, wheel, keys and swipe may only move within `reachable` — the steps
+   * already completed plus the one in progress. A customer can look back at what
+   * they did; they cannot slide past an identity check they have not passed.
+   */
+  at?: number;
+  onAt?: (i: number) => void;
+  /** Highest pane index a control may move to. Defaults to the last pane. */
+  reachable?: number;
+  /** "stack" shows every pane on a phone (a screen). "current" shows only the pane in view (a flow). */
+  mobile?: "stack" | "current";
 }) {
-  const [at, setAt] = useState(0);
+  const [innerAt, setInnerAt] = useState(0);
+  const controlled = controlledAt != null;
+  const at = controlled ? controlledAt : innerAt;
   const desktop = useIsDesktop();
   const slot = usePagerSlot();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -102,17 +130,42 @@ export function Deck({
   // Clamped, not wrapped. The wheel and the keyboard must have ends, or a
   // customer at the last pane who keeps scrolling is silently returned to the
   // first and cannot tell whether they moved forwards or backwards.
+  const ceiling = Math.max(0, Math.min(count - 1, reachable ?? count - 1));
   const clamp = useCallback(
-    (n: number) => Math.max(0, Math.min(count - 1, n)),
-    [count],
+    (n: number) => Math.max(0, Math.min(ceiling, n)),
+    [ceiling],
+  );
+
+  const setAt = useCallback(
+    (next: number | ((i: number) => number)) => {
+      const value = typeof next === "function" ? next(at) : next;
+      if (controlled) onAt?.(value);
+      else setInnerAt(value);
+    },
+    [at, controlled, onAt],
   );
 
   // A window narrowed to phone width while parked on pane 2 leaves `at` pointing
   // at a pane the stacked layout no longer positions. Reset rather than carry a
-  // stale index back when it widens again.
+  // stale index back when it widens again. A controlled flow keeps its step.
   useEffect(() => {
-    if (!desktop) setAt(0);
-  }, [desktop]);
+    if (!desktop && !controlled) setInnerAt(0);
+  }, [desktop, controlled]);
+
+  const goTo = useCallback(
+    (target: string | number) => {
+      const i = typeof target === "number" ? target : panes.findIndex((p) => p.id === target);
+      if (i < 0) return;
+      const next = clamp(i);
+      setAt(next);
+      // Stacked on a phone: the "slide" is a scroll to the pane.
+      if (!desktop && mobile === "stack") {
+        requestAnimationFrame(() => paneRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }
+    },
+    [clamp, desktop, mobile, panes, setAt],
+  );
+  const api = useMemo(() => ({ at, goTo }), [at, goTo]);
 
   // ── THE WHEEL ────────────────────────────────────────────────────────────
   // A native listener, not React's onWheel: `preventDefault` inside a passive
@@ -207,7 +260,8 @@ export function Deck({
               aria-current={i === at}
               aria-label={p.label}
               title={p.label}
-              onClick={() => setAt(i)}
+              disabled={i > ceiling}
+              onClick={() => setAt(clamp(i))}
             />
           ))}
         </span>
@@ -218,26 +272,40 @@ export function Deck({
             to be told that there IS a next and what is on it. At the last pane
             it turns round and offers the way back, so the control is never a
             dead rectangle. */}
-        <button
-          type="button"
-          onClick={() => setAt((i) => (i >= count - 1 ? 0 : i + 1))}
-          className="group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
-          style={{ borderColor: "var(--line-strong)" }}
-        >
-          <span className="max-w-[16ch] truncate">
-            {at >= count - 1 ? panes[0].label : panes[at + 1].label}
+        {/* A flow whose next step is not open yet names that step and locks it,
+            rather than wrapping round to the first pane as though the road ended. */}
+        {at >= ceiling && ceiling < count - 1 ? (
+          <span
+            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold text-ink-faint"
+            style={{ borderColor: "var(--line)" }}
+            aria-disabled
+          >
+            <Lock className="h-3 w-3 shrink-0" strokeWidth={2.4} />
+            <span className="max-w-[16ch] truncate">{panes[at + 1]?.label}</span>
           </span>
-          {at >= count - 1 ? (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
-          ) : (
-            <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
-          )}
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAt((i) => (i >= ceiling ? 0 : i + 1))}
+            className="group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
+            style={{ borderColor: "var(--line-strong)" }}
+          >
+            <span className="max-w-[16ch] truncate">
+              {at >= ceiling ? panes[0].label : panes[at + 1].label}
+            </span>
+            {at >= ceiling ? (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
+            ) : (
+              <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
+            )}
+          </button>
+        )}
       </div>
     );
 
   return (
-    <div className="deck">
+    <DeckContext.Provider value={api}>
+    <div className={`deck ${mobile === "current" ? "deck--flow" : ""}`}>
       <div
         ref={viewportRef}
         className="deck-viewport"
@@ -276,8 +344,10 @@ export function Deck({
               // Below lg every pane is on the page at once and none of them is
               // hidden — the attribute is only meaningful where the CSS acts on
               // it, and `desktop` is what keeps the two in step.
-              aria-hidden={desktop && i !== at}
+              aria-hidden={(desktop || mobile === "current") && i !== at}
               aria-label={p.label}
+              // A flow on a phone shows only the step in hand.
+              hidden={!desktop && mobile === "current" && i !== at}
             >
               {p.node}
             </section>
@@ -294,6 +364,7 @@ export function Deck({
           there is not. */}
       {desktop && pager && (slot ? createPortal(pager, slot) : <div className="mt-2 flex justify-end">{pager}</div>)}
     </div>
+    </DeckContext.Provider>
   );
 }
 

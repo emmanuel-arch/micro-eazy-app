@@ -58,7 +58,7 @@ export type IdCaptureResult = {
  * compressed bytes, and a JPEG's size tells you almost nothing about whether
  * the photograph is legible.
  */
-async function prepare(file: File): Promise<{ dataUrl: string; bytes: number; brightness: number; blurVar: number }> {
+export async function prepare(file: File): Promise<{ dataUrl: string; bytes: number; brightness: number; blurVar: number }> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const w = Math.round(bitmap.width * scale);
@@ -121,18 +121,21 @@ async function prepare(file: File): Promise<{ dataUrl: string; bytes: number; br
 
 export function IdCapture({
   nationalId,
+  sessionId,
   onRead,
   onCancel,
 }: {
   /** The typed number, if there is one. The server compares it with what it
    *  reads and reports `idMismatch` — it does not silently prefer either. */
   nationalId?: string;
+  /** An identity session already open (the registry rail opened one). */
+  sessionId?: string;
   onRead: (r: IdCaptureResult) => void;
   onCancel?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const sessionRef = useRef<string | undefined>(undefined);
+  const sessionRef = useRef<string | undefined>(sessionId);
 
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

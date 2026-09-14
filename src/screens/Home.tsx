@@ -23,8 +23,10 @@
 //                     to me — and anything blocking (an unverified ID, an
 //                     application mid-flight), because a customer whose next
 //                     action is "finish your ID" must not have to go looking.
-//   2. YOUR STANDING  The score and what moved it, the schedule, and the things
-//                     worth reading when nothing needs doing.
+//                     The three explainers sit here too, under Messages.
+//   2. HELP & FAQS    Each explainer in full, opened at the one "Read more"
+//                     was pressed on, and the questions people ring about.
+//   3. YOUR STANDING  The score and what moved it, and the schedule.
 //
 // On a phone the deck is a plain vertical stack in exactly that order, so the
 // handset layout is unchanged and still the design target.
@@ -45,10 +47,11 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight, Banknote, Gauge, FileText, Landmark, ChevronRight,
   CalendarClock, MessageSquareText, CloudOff, ScanFace, Route as RouteIcon,
-  PiggyBank, Smartphone,
+  PiggyBank, Smartphone, BookOpen, ChevronDown, LifeBuoy,
 } from "lucide-react";
 import { Sky } from "../components/shell/Sky";
-import { Deck, type Pane } from "../components/shell/Deck";
+import { Deck, useDeck, type Pane } from "../components/shell/Deck";
+import { FAQS, HELP_TOPICS, helpTopic, type HelpTopicId } from "../lib/help/content";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { Artwork } from "../components/media/Artwork";
 import { ChannelBadge } from "../components/shell/ChannelBadge";
@@ -73,22 +76,149 @@ const SCORE_TONE: Record<"good" | "warn" | "high" | "bad", { ink: string; fill: 
   bad: { ink: "#be123c", fill: "linear-gradient(90deg, #e11d48, #fb7185)" },
 };
 
-/** Short enough to be read while walking. Each answers a question people
- *  actually ask a call centre, which is why they are here and not in a FAQ. */
-const TIPS = [
-  { slot: "tip-credit-score", motif: 0 as const, title: "What is a credit score?", body: "What it measures, and why yours moves every time you repay." },
-  { slot: "tip-what-moves-limit", motif: 1 as const, title: "What moves your limit", body: "The four things we look at, in plain language." },
-  { slot: "tip-charges", motif: 2 as const, title: "Understanding the charges", body: "What you pay, when, and what happens if you are late." },
-];
-
 const ACTIONS = [
-  { icon: Banknote, label: "New loan", note: "Decision in minutes", tint: "#5ec22a", to: "/join" },
+  { icon: Banknote, label: "New loan", note: "Decision in minutes", tint: "#5ec22a", to: "/apply" },
   { icon: Landmark, label: "Repay", note: "M-PESA or Ratiba", tint: "#5b8cff", to: "/repay" },
   { icon: Gauge, label: "My score", note: "Out of 900", tint: "#f0a92b", to: "/score" },
-  // Straight to the one step, not to the top of the wizard. `?step=` is a
-  // presenter and grants nothing — see the note in onboarding/Onboarding.tsx.
-  { icon: FileText, label: "Statements", note: "Crunch a new one", tint: "#a78bfa", to: "/join?step=statement" },
+  { icon: FileText, label: "Statements", note: "Crunch a new one", tint: "#a78bfa", to: "/crunch" },
 ];
+
+/**
+ * ── THE THREE EXPLAINERS, ON PANE ONE ───────────────────────────────────────
+ * They were moved to the second pane's right column, where most people never
+ * went. They answer the three questions a call centre hears most, so they sit
+ * on the first pane under Messages — compact, one row each — and "Read more"
+ * slides to the help pane open at that topic. On a phone the panes are stacked
+ * and the same button scrolls there. The card neither knows nor cares which.
+ */
+function AdviceCard({ onRead }: { onRead: (id: HelpTopicId) => void }) {
+  const { goTo } = useDeck();
+  return (
+    <section className="card overflow-hidden">
+      <div className="flex items-center gap-2.5 border-b px-5 py-3 lg:py-2.5" style={{ borderColor: "var(--line)" }}>
+        <BookOpen className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2.1} />
+        <p className="flex-1 text-[13px] font-semibold">Advice and tips</p>
+      </div>
+      <ul>
+        {HELP_TOPICS.map((t) => (
+          <li key={t.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0" style={{ borderColor: "var(--line)" }}>
+            <Artwork slot={t.slot} motif={t.motif} rounded="rounded-lg" className="!h-10 !w-10 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-semibold leading-tight">{t.title}</span>
+              <span className="mt-0.5 block truncate text-[11px] leading-snug text-ink-faint">{t.teaser}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onRead(t.id);
+                goTo("help");
+              }}
+              className="shrink-0 rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:bg-surface-sunk"
+              style={{ borderColor: "var(--line-strong)", color: "var(--brand-ink)" }}
+            >
+              Read more
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Pane two: the topic in full, and the questions people ring about. */
+function HelpPane({ topic, onTopic }: { topic: HelpTopicId; onTopic: (id: HelpTopicId) => void }) {
+  const t = helpTopic(topic);
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <PaneGrid
+      left={
+        <section className="card overflow-hidden">
+          <div className="flex flex-wrap gap-2 border-b px-5 py-3" style={{ borderColor: "var(--line)" }} role="tablist" aria-label="Topics">
+            {HELP_TOPICS.map((x) => {
+              const on = x.id === t.id;
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => onTopic(x.id)}
+                  className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
+                  style={{
+                    borderColor: on ? "transparent" : "var(--line-strong)",
+                    background: on ? "var(--brand-soft)" : "transparent",
+                    color: on ? "var(--brand-ink)" : "var(--ink-soft)",
+                  }}
+                >
+                  {x.title}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-4 p-5 lg:p-4" role="tabpanel">
+            <Artwork slot={t.slot} motif={t.motif} rounded="rounded-xl" className="hidden !h-[120px] !w-[120px] shrink-0 sm:block" />
+            <div className="min-w-0">
+              <h2 className="text-[17px] font-bold tracking-[-0.015em]">{t.title}</h2>
+              <div className="mt-2 space-y-2 text-[12.5px] leading-relaxed text-ink-soft">
+                {t.body.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+          {t.points && (
+            <dl className="grid gap-px border-t sm:grid-cols-3" style={{ borderColor: "var(--line)", background: "var(--line)" }}>
+              {t.points.map((p) => (
+                <div key={p.label} className="px-4 py-3" style={{ background: "var(--surface)" }}>
+                  <dt className="text-[12px] font-semibold">{p.label}</dt>
+                  <dd className="mt-1 text-[11.5px] leading-snug text-ink-faint">{p.detail}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </section>
+      }
+      right={
+        <section className="card overflow-hidden">
+          <div className="flex items-center gap-2.5 border-b px-5 py-3" style={{ borderColor: "var(--line)" }}>
+            <LifeBuoy className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2.1} />
+            <p className="flex-1 text-[13px] font-semibold">Questions people ask</p>
+            <Link to="/messages/new" className="text-[12px] font-semibold" style={{ color: "var(--brand-ink)" }}>
+              Ask us
+            </Link>
+          </div>
+          {FAQS.map((g) => (
+            <div key={g.title}>
+              <p className="px-5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">{g.title}</p>
+              <ul>
+                {g.items.map((f) => {
+                  const on = open === f.q;
+                  return (
+                    <li key={f.q} className="border-b last:border-b-0" style={{ borderColor: "var(--line)" }}>
+                      <button
+                        type="button"
+                        aria-expanded={on}
+                        onClick={() => setOpen(on ? null : f.q)}
+                        className="flex w-full items-center gap-2 px-5 py-2.5 text-left"
+                      >
+                        <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug">{f.q}</span>
+                        <ChevronDown
+                          className="h-4 w-4 shrink-0 text-ink-faint transition-transform duration-200"
+                          style={{ transform: on ? "rotate(180deg)" : undefined }}
+                        />
+                      </button>
+                      {on && <p className="px-5 pb-3 text-[12px] leading-relaxed text-ink-soft">{f.a}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </section>
+      }
+    />
+  );
+}
 
 /**
  * The shape every pane of this screen is laid out in.
@@ -121,6 +251,8 @@ export default function Home({
   const loan = data.activeLoan;
   const { nationalId, phoneMasked } = useSession();
   const [paying, setPaying] = useState(false);
+  /** Which explainer the help pane is open at — set by "Read more" on pane one. */
+  const [topic, setTopic] = useState<HelpTopicId>("credit-score");
 
   // ── "WE COULD NOT ASK" IS NOT "YOU OWE NOTHING" ──────────────────────────
   // On a bridged lender the balance comes from THEIR book over THEIR API. When
@@ -129,6 +261,24 @@ export default function Home({
   // news is the single worst thing this screen could do, so the whole money
   // card changes shape rather than rendering figures nobody stands behind.
   const bookDown = data.bookSource === "unavailable";
+  // Three different reasons, three different sentences. Only "unreachable" is
+  // an outage; the other two are a record only a person can put right, and
+  // "try again in a moment" would send somebody round in circles.
+  const bookCopy =
+    data.bookIssue === "ambiguous"
+      ? {
+          title: "Your number is on more than one account",
+          body: `${data.lender} holds more than one record on this phone number, so we will not guess which balance is yours. Write to us and a person will sort it out.`,
+        }
+      : data.bookIssue === "mismatch"
+        ? {
+            title: "This number's account is under a different ID",
+            body: `The ${data.lender} account on this phone number does not carry the ID you verified with, so we are not showing it. Write to us and a person will check it.`,
+          }
+        : {
+            title: `We could not reach ${data.lender}`,
+            body: "Your balance and limit live on their system and it did not answer just now. Nothing has changed — we simply cannot show you the figures until it does.",
+          };
   // The commit buttons navigate imperatively rather than being wrapped in a
   // Link: an <a> around a <button> is two nested interactive elements, which
   // screen readers announce twice and keyboards tab into twice.
@@ -148,11 +298,17 @@ export default function Home({
             <CloudOff className="h-[18px] w-[18px]" strokeWidth={2.2} />
           </span>
           <div className="min-w-0">
-            <p className="text-[15px] font-semibold">We could not reach {data.lender}</p>
-            <p className="mt-1 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
-              Your balance and limit live on their system and it did not answer just now. Nothing has changed —
-              we simply cannot show you the figures until it does.
-            </p>
+            <p className="text-[15px] font-semibold">{bookCopy.title}</p>
+            <p className="mt-1 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">{bookCopy.body}</p>
+            {data.bookIssue && data.bookIssue !== "unreachable" && (
+              <Link
+                to="/messages/new"
+                className="mt-2 inline-block text-[12.5px] font-semibold underline underline-offset-4"
+                style={{ color: "var(--brand-ink)" }}
+              >
+                Write to us
+              </Link>
+            )}
           </div>
         </div>
       ) : (
@@ -340,13 +496,13 @@ export default function Home({
             <LiquidButton icon={Smartphone} trailingIcon={ArrowRight} size="lg" block onClick={() => setPaying(true)}>
               Pay now
             </LiquidButton>
-            <LiquidButton variant="metal" size="lg" block onClick={() => go("/join")}>
+            <LiquidButton variant="metal" size="lg" block onClick={() => go("/apply")}>
               Apply for a loan
             </LiquidButton>
           </>
         ) : (
           <>
-            <LiquidButton icon={Banknote} trailingIcon={ArrowRight} size="lg" block onClick={() => go("/join")}>
+            <LiquidButton icon={Banknote} trailingIcon={ArrowRight} size="lg" block onClick={() => go("/apply")}>
               Apply for a loan
             </LiquidButton>
             <LiquidButton variant="metal" icon={Smartphone} size="lg" block onClick={() => setPaying(true)}>
@@ -394,8 +550,12 @@ export default function Home({
   // surprise ninety seconds later.
   const prompts = (
     <>
-      {data.kycStatus !== "VERIFIED" && data.kycStatus !== "NONE" && (
-        <Link to="/identity" className="card flex w-full items-center gap-3 p-4 text-left lg:py-3">
+      {/* A customer new to the lender's book who has not started KYC is asked
+          to — an existing customer of the lender was verified at the branch
+          and has no local KYC status to show, so NONE alone proves nothing. */}
+      {(data.kycStatus === "IN_PROGRESS" || data.kycStatus === "FAILED" || data.kycStatus === "PENDING_REVIEW" ||
+        (data.kycStatus === "NONE" && (data.bookSource === "onboarding" || data.bookSource === "native"))) && (
+        <Link to="/kyc" className="card flex w-full items-center gap-3 p-4 text-left lg:py-3">
           <span
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
             style={{ background: "color-mix(in oklab, #818cf8 18%, transparent)", color: "#4f46e5" }}
@@ -404,7 +564,11 @@ export default function Home({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[14px] font-semibold leading-tight">
-              {data.kycStatus === "PENDING_REVIEW" ? "Your ID is with our team" : "Finish verifying your ID"}
+              {data.kycStatus === "PENDING_REVIEW"
+                ? "Your ID is with our team"
+                : data.kycStatus === "NONE"
+                  ? "Verify your identity to borrow"
+                  : "Finish verifying your ID"}
             </span>
             <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-faint">
               {data.kycStatus === "PENDING_REVIEW"
@@ -726,58 +890,7 @@ export default function Home({
     </section>
   );
 
-  // ── ADVICE AND TIPS ───────────────────────────────────────────────────────
-  // A lending app that only ever asks for things is a lending app people close.
-  //
-  // On a phone this is a row that bleeds off the edge, so a clipped card is the
-  // affordance to swipe it. On a laptop the cards turn on their side — artwork
-  // as a left strip, copy beside it — and stack down the second pane's right
-  // column, which is the shape that reads as a reading list rather than as three
-  // more things to do.
-  const tips = (
-    <section>
-      {/* ── THE HEADING IS PHONE-ONLY, FOR TWO REASONS ─────────────────────
-          The first is structural. Every column on every pane starts UNDER the
-          Sky's overlap — the cards are opaque and ride on it, which is the whole
-          trick (see the note on `relative z-10` at the foot of this file). Bare
-          type has no surface to do that with, so this heading was sitting in
-          navy-on-navy at the top of the second pane's right column.
-
-          The second is that "View all" has never been wired to anything. On a
-          phone the heading still earns its place: the tips are a row that bleeds
-          off the screen edge and needs naming. On a laptop they are three
-          labelled cards in a column and name themselves, so this is a dead
-          control and a redundant label taking 34px of a fixed height budget. */}
-      <div className="mb-2.5 flex items-baseline justify-between gap-3 px-1 lg:hidden">
-        <h2 className="text-[15px] font-bold tracking-[-0.015em]">Advice and tips</h2>
-        <button className="text-[12.5px] font-semibold" style={{ color: "var(--brand-ink)" }}>
-          View all
-        </button>
-      </div>
-
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
-        {TIPS.map((t) => (
-          <article
-            key={t.slot}
-            className="card w-[228px] shrink-0 snap-start overflow-hidden lg:flex lg:w-auto lg:shrink"
-          >
-            <Artwork
-              slot={t.slot}
-              motif={t.motif}
-              rounded="rounded-none"
-              className="lg:h-full lg:w-[104px] lg:shrink-0"
-            />
-            <div className="p-3.5">
-              <h3 className="text-[13.5px] font-semibold leading-tight">{t.title}</h3>
-              <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{t.body}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-
-  // ── THE TWO PANES ─────────────────────────────────────────────────────────
+  // ── THE PANES ─────────────────────────────────────────────────────────────
   // Two, not three. The first cut of this was three thinner panes and the middle
   // one was half empty — which is the failure mode of a fixed frame: whitespace
   // that reads as content still loading rather than as composition. A pane
@@ -819,26 +932,28 @@ export default function Home({
             <>
               {nextPayment}
               {messages}
+              <AdviceCard onRead={setTopic} />
             </>
           }
         />
       ),
     },
     {
-      id: "standing",
-      label: "Your standing",
-      node: (
-        <PaneGrid
-          left={
-            <>
-              {scoreCard}
-              {schedule}
-            </>
-          }
-          right={tips}
-        />
-      ),
+      id: "help",
+      label: "Help & FAQs",
+      node: <HelpPane topic={topic} onTopic={setTopic} />,
     },
+    // The score in full and the schedule — only when there is either to show.
+    // A pane of nothing is the failure mode of a fixed frame.
+    ...(scoreCard || schedule
+      ? [
+          {
+            id: "standing",
+            label: "Your standing",
+            node: <PaneGrid left={scoreCard || schedule} right={scoreCard ? schedule || undefined : undefined} />,
+          },
+        ]
+      : []),
   ];
 
   return (

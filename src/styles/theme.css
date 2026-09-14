@@ -1301,6 +1301,26 @@ a:hover > .letterhead {
   }
 }
 
+/* ── THE LENDER'S MARK ON THE SPLASH ─────────────────────────────────────────
+   The light splash is an 85% white veil, which is paper: the mark rests on it
+   bare, the way it rests in the corner of the welcome and sign-in pages. Only the
+   dark veil needs the white plate, because the mark's dark tones (Micromart's
+   #3c320b bars) disappear into it. Unlike .lender-chip this applies at EVERY
+   width — the splash has no brand band on a phone to lift the mark off. */
+.splash-mark {
+  display: grid;
+  place-items: center;
+  background: transparent;
+  padding: 0;
+  border-radius: 1.25rem;
+}
+
+[data-theme="dark"] .splash-mark {
+  background: #ffffff;
+  padding: 0.75rem;
+  box-shadow: 0 14px 34px -18px rgb(0 0 0 / 0.55);
+}
+
 /* ── INSIDE A LENDER'S APP, THE CALL TO ACTION IS THEIRS ─────────────────────
    LiquidButton's `primary` reads --cta-fill and --cta-ink, falling back to Micro
    Eazy's own lime-with-navy. Outside the signed-in shell nothing sets them, so

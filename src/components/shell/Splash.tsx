@@ -93,19 +93,19 @@ export function Splash({
             </>
           ) : (
             <>
-              {/* The lender's mark on a white plate. Several lenders' files are
-                  drawn for white letterhead and have no transparency, and every
-                  one of them carries dark tones that sink into the dark theme's
-                  ground — the plate is what keeps the mark a mark in both. */}
-              <span
-                className="grid place-items-center rounded-2xl bg-white p-3"
-                style={{ boxShadow: "0 14px 34px -18px rgb(0 0 0 / 0.35)" }}
-              >
+              {/* ── BARE ON PAPER, PLATED ON DARK ─────────────────────────────
+                  The mark sat on a white plate in both themes, which on the light
+                  splash's pale ground is a white box around a logo — the boxed,
+                  app-tile look the front door already removed. It now follows
+                  the same rule as the auth header's corner mark: transparent on
+                  the light theme, a white plate only on the dark one, where the
+                  mark's dark tones would otherwise sink. See .splash-mark. */}
+              <span className="splash-mark">
                 <img
                   src={lender.mark}
                   alt=""
                   aria-hidden="true"
-                  className="h-[72px] w-[72px] object-contain"
+                  className="h-[88px] w-[88px] object-contain"
                   draggable={false}
                 />
               </span>

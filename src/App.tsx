@@ -28,10 +28,13 @@ import SignIn from "./screens/SignIn";
 import SignInPassword from "./screens/SignInPassword";
 import { Splash, useSplashFloor, type SplashLivery } from "./components/shell/Splash";
 import { Resource } from "./components/data/Resource";
-import { exposure, home, ladder, track, whyThisDecision } from "./lib/api/portal";
+import { useEffect, useState } from "react";
+import { exposure, home, journey, ladder, track, whyThisDecision } from "./lib/api/portal";
 import Home from "./screens/Home";
 import Placeholder from "./screens/Placeholder";
-import Onboarding from "./screens/onboarding/Onboarding";
+import Kyc from "./screens/kyc/Kyc";
+import Cruncher from "./screens/crunch/Cruncher";
+import ApplyNow from "./screens/apply/ApplyNow";
 import Welcome from "./screens/Welcome";
 import Repay from "./screens/Repay";
 import WhyThisDecision from "./screens/WhyThisDecision";
@@ -126,6 +129,33 @@ function LenderRoute({ children }: { children: ReactNode }) {
 function RootRedirect() {
   const lender = useLender();
   return <Navigate to={`/${lender.slug}`} replace />;
+}
+
+/**
+ * ── /join IS A SIGNPOST NOW, NOT A WIZARD ────────────────────────────────────
+ * The single onboarding wizard became three screens a customer can find in the
+ * rail: KYC verification, the statement cruncher, Apply now. Old links (an SMS,
+ * a bookmark, "New loan" from an older build) still say /join, so it asks the
+ * server where this customer actually is and sends them there. `?step=statement`
+ * — the old deep link to the statement step — goes straight to the cruncher.
+ */
+function JoinRedirect() {
+  const location = useLocation();
+  const [to, setTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("step") === "statement") {
+      setTo("/crunch");
+      return;
+    }
+    let live = true;
+    journey()
+      .then((j) => live && setTo({ kyc: "/kyc", crunch: "/crunch", apply: "/apply", track: "/track" }[j.status.next]))
+      .catch(() => live && setTo("/kyc"));
+    return () => {
+      live = false;
+    };
+  }, [location.search]);
+  return to ? <Navigate to={to} replace /> : null;
 }
 
 /** Sends the retired unbranded /signin to the current lender's own door,
@@ -309,7 +339,13 @@ function Shell() {
                 already a customer — walking somebody through KYC they finished
                 last year is how you lose them, and doing it because a lookup
                 failed is how you open a second account against a live one. */}
-            <Route path="/join" element={<RequireSession><Onboarding /></RequireSession>} />
+            <Route path="/join" element={<RequireSession><JoinRedirect /></RequireSession>} />
+            {/* ── The borrowing road, one screen per step ─────────────────────
+                Each is a controlled deck of panes driven by the lender's own
+                rules from the server — see components/flow/FlowScreen.tsx. */}
+            <Route path="/kyc" element={<RequireSession><Kyc /></RequireSession>} />
+            <Route path="/crunch" element={<RequireSession><Cruncher /></RequireSession>} />
+            <Route path="/apply" element={<RequireSession><ApplyNow /></RequireSession>} />
             {/* The SAME endpoint Home reads. One call, one truth — the two
                 screens cannot disagree about what somebody owes. */}
             <Route

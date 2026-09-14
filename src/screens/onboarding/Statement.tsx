@@ -22,7 +22,7 @@ import { Film } from "../../components/media/Film";
 
 /** Kept in step with connected-suite/src/components/statement/StatementHowTo.tsx.
  *  If Safaricom moves the menu, both change together or neither does. */
-const USSD_STEPS: { key: string; label: string; detail?: string }[] = [
+export const USSD_STEPS: { key: string; label: string; detail?: string }[] = [
   { key: "*334#", label: "Dial the M-PESA menu" },
   { key: "7", label: "My Account" },
   { key: "3", label: "M-PESA Statement" },

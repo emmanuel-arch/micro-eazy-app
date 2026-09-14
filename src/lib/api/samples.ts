@@ -71,7 +71,14 @@ export const SAMPLE_PRODUCTS: Product[] = [
     repaymentPeriod: 10,
     repaymentUnit: "week",
     minCreditScore: 500,
-    charges: [{ name: "Registration fee", amount: 450, when: "before-disbursement" }],
+    minRepaymentPeriod: 1,
+    serviceSuiteProductId: 30219,
+    // Micromart's ProductFees for 30219, read live 13 Sep 2026.
+    charges: [
+      { code: "PF", name: "Processing fee", when: "before-disbursement", percent: true, value: 6, min: 650, max: 6000, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+      { code: "CRB", name: "CRB fee", when: "before-disbursement", percent: false, value: 100, min: 100, max: 100, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+      { code: "SF", name: "Security fee", when: "before-disbursement", percent: false, value: 50, min: 50, max: 50, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+    ],
   },
   {
     id: "micro-eazy-monthly",
@@ -85,7 +92,13 @@ export const SAMPLE_PRODUCTS: Product[] = [
     repaymentPeriod: 2,
     repaymentUnit: "month",
     minCreditScore: 500,
-    charges: [{ name: "Registration fee", amount: 850, when: "before-disbursement" }],
+    minRepaymentPeriod: 1,
+    serviceSuiteProductId: 30220,
+    charges: [
+      { code: "PF", name: "Processing fee", when: "before-disbursement", percent: true, value: 6, min: 650, max: 6000, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+      { code: "CRB", name: "CRB fee", when: "before-disbursement", percent: false, value: 100, min: 100, max: 100, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+      { code: "SF", name: "Security fee", when: "before-disbursement", percent: false, value: 50, min: 50, max: 50, fromPrincipal: 5000, toPrincipal: 100000, mandatory: true },
+    ],
   },
   {
     // `ss:` because there is no local Product row for it — this is the id form
@@ -102,9 +115,16 @@ export const SAMPLE_PRODUCTS: Product[] = [
     repaymentPeriod: 10,
     repaymentUnit: "week",
     minCreditScore: 500,
-    // No charge is recorded for this product on either side yet. Left EMPTY
-    // rather than copied from Micro Eazy — inventing a KSh 450 fee that the
-    // lender does not charge is the same class of error as omitting one they do.
+    minRepaymentPeriod: 1,
+    serviceSuiteProductId: 30221,
+    // Micromart's ProductFees for 30221, read live 13 Sep 2026: flat fees, and a
+    // KSh 350 instalment fee spread across the repayments.
+    charges: [
+      { code: "PF", name: "Processing fee", when: "before-disbursement", percent: false, value: 400, min: 400, max: 400, fromPrincipal: 5000, toPrincipal: 10900, mandatory: true },
+      { code: "SF", name: "Security fee", when: "before-disbursement", percent: false, value: 50, min: 50, max: 50, fromPrincipal: 5000, toPrincipal: 10900, mandatory: true },
+      { code: "CF", name: "CRB fee", when: "before-disbursement", percent: false, value: 100, min: 100, max: 100, fromPrincipal: 5000, toPrincipal: 10900, mandatory: true },
+      { code: "CIF", name: "Chap instalment fee", when: "on-repayment", percent: false, value: 350, min: 350, max: 350, fromPrincipal: 5000, toPrincipal: 10900, mandatory: true },
+    ],
   },
 ];
 

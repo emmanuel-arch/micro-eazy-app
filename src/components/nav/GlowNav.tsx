@@ -23,7 +23,7 @@ import { NavLink } from "react-router-dom";
 import { useLender } from "../../lib/lender";
 import {
   Home, Wallet, Gauge, FileText, User, MessageSquare, Route as RouteIcon,
-  TrendingUp, ShieldCheck, ScanFace, type LucideIcon,
+  TrendingUp, ShieldCheck, ScanFace, FileSpreadsheet, Banknote, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -67,16 +67,24 @@ const LOANS: NavItem = { icon: FileText, label: "Your loans", to: "/loans", glow
 const SCORE: NavItem = { icon: Gauge, label: "Your score", to: "/score", glow: "rgba(245,158,11,0.42)", tint: "#f0a92b" };
 const LADDER: NavItem = { icon: TrendingUp, label: "Limit ladder", to: "/ladder", glow: "rgba(245,158,11,0.42)", tint: "#f0a92b" };
 const EXPOSURE: NavItem = { icon: ShieldCheck, label: "Credit file", to: "/exposure", glow: "rgba(99,102,241,0.42)", tint: "#818cf8" };
-const IDENTITY: NavItem = { icon: ScanFace, label: "ID check", to: "/identity", glow: "rgba(99,102,241,0.42)", tint: "#818cf8" };
+// ── THE BORROWING ROAD, IN ORDER ────────────────────────────────────────────
+// "ID check" used to sit under Account, as though proving who you are were a
+// settings page. It is the first of three steps to a loan, so the three live
+// together under Now, in the order they are done: verify, read the statement,
+// apply. /identity still exists — it is where a referred check is explained —
+// but it is reached from the KYC screen, not from the rail.
+const KYC: NavItem = { icon: ScanFace, label: "KYC verification", to: "/kyc", glow: "rgba(99,102,241,0.42)", tint: "#818cf8" };
+const CRUNCH: NavItem = { icon: FileSpreadsheet, label: "Statement cruncher", to: "/crunch", glow: "rgba(76,183,73,0.42)", tint: "#4CB749" };
+const APPLY: NavItem = { icon: Banknote, label: "Apply now", to: "/apply", glow: "rgba(37,149,12,0.42)", tint: "#5ec22a" };
 const YOU: NavItem = { icon: User, label: "You", to: "/you", glow: "rgba(236,72,153,0.42)", tint: "#f472b6" };
 
 /** The sidebar: everything, in the order a customer's relationship runs — what
  *  is happening now, then the money, then what the lender thinks of them. */
 export const NAV_GROUPS: NavGroup[] = [
-  { label: "Now", items: [HOME, TRACK, MESSAGES] },
+  { label: "Now", items: [HOME, KYC, CRUNCH, APPLY, TRACK, MESSAGES] },
   { label: "Money", items: [REPAY, LOANS] },
   { label: "Standing", items: [SCORE, LADDER, EXPOSURE] },
-  { label: "Account", items: [IDENTITY, YOU] },
+  { label: "Account", items: [YOU] },
 ];
 
 /** Flattened, for anything that wants the whole list without the headings. */
@@ -90,7 +98,7 @@ export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
  * at which point the icons are the only thing distinguishing them and the bar
  * has stopped being navigation. The rail is where breadth goes.
  */
-export const TAB_ITEMS: NavItem[] = [HOME, TRACK, MESSAGES, REPAY, YOU];
+export const TAB_ITEMS: NavItem[] = [HOME, { ...APPLY, label: "Apply" }, TRACK, REPAY, MESSAGES];
 
 const spring = { type: "spring" as const, stiffness: 380, damping: 32 };
 
