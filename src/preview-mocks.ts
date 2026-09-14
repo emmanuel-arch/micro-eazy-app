@@ -152,12 +152,56 @@ export const CRUNCH: CrunchResult = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+// ── Riri, canned — the shapes of connected-suite/src/app/api/portal/riri/*. The
+// words are what the real engine says for these questions (see
+// scripts/verify-first-response.ts there), so a screenshot shows her true voice.
+const RIRI_HELLO = {
+  success: true, enabled: true, name: "Riri", lender: "Micromart Africa",
+  opener: {
+    en: "I'm Riri. I can help with your loan, your repayments, your limit, M-PESA Ratiba, and how Micro Eazy works — straight from your own account. If I find something I can't solve, I'll pass it to a person at Micromart Africa with everything I've already checked.",
+    sw: "Mimi ni Riri. Naweza kukusaidia na mkopo wako, malipo yako, kiwango chako, M-PESA Ratiba, na jinsi Micro Eazy inavyofanya kazi.",
+  },
+  prompts: {
+    en: ["What do I owe?", "When is my next payment?", "Do I need to dial *334# for Ratiba?", "How much can I borrow?", "Where is my application?", "I want to talk to a person"],
+    sw: ["Nadaiwa kiasi gani?", "Nilipe lini?", "Ratiba ni nini?", "Naweza kukopa kiasi gani?", "Ombi langu liko wapi?", "Nataka kuongea na mtu"],
+  },
+};
+
+function ririAnswer(question: string) {
+  const q = question.toLowerCase();
+  const base = { success: true, name: "Riri", lang: "en", confidence: "certain", checked: ["customer.record"], suggestions: [] as string[], screen: null, escalation: null, canEscalate: false };
+  if (/person|human|someone/.test(q)) {
+    return { ...base, outcome: "escalated", intent: "human", engine: "record", sources: [], actions: [], answer: "Of course — I'll get you to a person at Micromart Africa. I've passed your conversation to the team with what I can already see on your account, so you won't have to explain it twice. Their reply will appear in Messages.", escalation: { threadId: "t-1", caseRef: "ME-7C21A4" } };
+  }
+  if (/paid but|not changed|twice|reflect/.test(q)) {
+    return { ...base, outcome: "escalate", intent: "dispute", engine: "knowledge", confidence: "likely", canEscalate: true, sources: [{ id: "platform.ratiba@1#4", label: "Platform · platform.ratiba v1" }], actions: [{ kind: "navigate", label: "Open Repay", href: "/repay", screenId: "app-repay" }], answer: "Let me look at your account. A Ratiba payment reaches us and is applied to your loan first, with anything left over going to your savings — that allocation is automatic and nobody, including us, redirects it.\n\nRight now your balance shows KSh 12,400. This is worth a person following to the end rather than you checking back. I can raise it with the team now — they'll see what you told me and what I checked." };
+  }
+  if (/334|ratiba/.test(q)) {
+    return { ...base, outcome: "resolved", intent: "knowledge", engine: "knowledge", checked: ["corpus"], sources: [{ id: "platform.ratiba@1#1", label: "Platform · platform.ratiba v1" }], actions: [], suggestions: ["How do I stop or change my Ratiba standing order?", "Does Ratiba cost me anything?"], answer: "You can use either. Ratiba lives on *334# on your phone, and also inside the M-PESA app — both take you to the same subscriptions, so use whichever is easier for you. If we set the standing order up for you when you took the loan, it is already there; *334# is how you check it, change the amount, or stop it.\n\nMore: https://www.safaricom.co.ke/personal/m-pesa/m-pesa-services/m-pesa-ratiba" };
+  }
+  if (/next payment|due/.test(q)) {
+    return { ...base, outcome: "offer", intent: "due", engine: "record", canEscalate: true, sources: [], actions: [{ kind: "navigate", label: "Open Repay", href: "/repay", screenId: "app-repay" }], suggestions: ["What do I owe?", "How do I repay?"], answer: "I can see your Micro Chap Chap has **KSh 12,400** left and is due to be cleared by **12 Oct 2026**. But the part of Micromart Africa's records I can read doesn't carry the date and amount of each instalment — and I won't work one out, because that's the number you'd actually pay. Your loan agreement and SMS reminders have your schedule, or I can ask the team to confirm your next instalment." };
+  }
+  return { ...base, outcome: "resolved", intent: "balance", engine: "record", sources: [], actions: [{ kind: "navigate", label: "Open Repay", href: "/repay", screenId: "app-repay" }], suggestions: ["When is my next payment?", "How do I repay?", "How much can I borrow?"], answer: "Your outstanding balance with Micromart Africa is **KSh 12,400**. Your open loan is **Micro Chap Chap**: KSh 10,000 borrowed, **KSh 12,400** left to pay. It's due to be cleared by **12 Oct 2026**." };
+}
+
 export function installMocks(screen: string) {
   const real = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const path = new URL(url, location.origin).pathname;
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    if (path === "/api/portal/riri" && (init?.method ?? "GET") === "GET") return json(RIRI_HELLO);
+    if (path === "/api/portal/riri") {
+      await wait(500);
+      return json(ririAnswer(String(JSON.parse(String(init?.body ?? "{}")).question ?? "")));
+    }
+    if (path === "/api/portal/riri/escalate") {
+      await wait(600);
+      return json({ success: true, threadId: "t-1", caseRef: "ME-7C21A4", created: true, message: "Done — I've passed this to the team at Micromart Africa as case ME-7C21A4." });
+    }
+    if (path === "/api/portal/riri/feedback") return json({ success: true });
+    if (path === "/api/portal/messages") return json({ success: true, lender: "Micromart Africa", threads: [], unread: 0 });
     if (path === "/api/portal/session") return json({ authenticated: true, lenderSlug: "micromart", phoneMasked: "0758 ••• 032", nationalId: "31234567" });
     if (path === "/api/portal/journey") return json(journeyFor(screen));
     if (path === "/api/portal/home") return json({ ...SAMPLE_HOME, bookSource: screen.startsWith("apply") ? "onboarding" : SAMPLE_HOME.bookSource });

@@ -895,8 +895,9 @@ export const consents = () =>
 // and the rule in transport.ts is that anything not provably safe to repeat
 // says nothing here and does not fail over.
 
-/** borrower · staff · system. `system` is the workflow talking, not a person. */
-export type MessageAuthor = "borrower" | "staff" | "system";
+/** borrower · staff · system · assistant. `system` is the workflow talking, not a
+ *  person; `assistant` is Riri handing the customer over, with her triage note. */
+export type MessageAuthor = "borrower" | "staff" | "system" | "assistant";
 
 export type ThreadKind = "APPLICATION" | "KYC_REVIEW" | "LOAN" | "REPAYMENT" | "GENERAL";
 export type ThreadState = "AWAITING_STAFF" | "AWAITING_CUSTOMER" | "RESOLVED";

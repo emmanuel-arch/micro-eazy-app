@@ -64,6 +64,8 @@ import { ScrollVeil, useCutOff } from "./ScrollVeil";
 import { useLender } from "../../lib/lender";
 import { ThemeToggle } from "./ThemeToggle";
 import { IdentityMenu } from "./IdentityMenu";
+import { RiriDock } from "../riri/RiriDock";
+import { WhyHereBar } from "../riri/WhyHereBar";
 
 /** The one sentence this app is required to be able to point at. It belongs to
  *  the SHELL, not to a screen, so that no screen can be the one that forgot it. */
@@ -299,6 +301,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ref={setMainEl}
                 className="relative min-h-0 flex-1 pb-4 lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden"
               >
+                {/* "Riri brought you here because you asked…" — plan §06. */}
+                <WhyHereBar />
                 {children}
                 <ScrollVeil show={mainCutOff} />
               </main>
@@ -330,6 +334,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       <footer className="legal-bar legal-bar--brand mt-3 shrink-0 px-5 py-2 lg:mt-1.5">
         <p className="legal-ink mx-auto max-w-[1400px] text-center text-[11px] leading-[1.45]">{DISCLOSURE}</p>
       </footer>
+
+      {/* ── RIRI, FIRST CONTACT ───────────────────────────────────────────────
+          The customer's assistant, bottom-right on every signed-in screen — the
+          same device the lender's officers carry in their console. She sits in the
+          shell rather than on a screen for the reason the legal bar does: no screen
+          can be the one that forgot her. It is `fixed`, so the frame's overflow
+          rules do not clip it, and it lifts itself clear of the tab bar on a phone
+          and the legal bar on a laptop. */}
+      <RiriDock />
 
       {/* ── The drawer ───────────────────────────────────────────────────── */}
       {drawer && (

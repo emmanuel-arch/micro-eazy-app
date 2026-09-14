@@ -1343,3 +1343,142 @@ a:hover > .letterhead {
 [data-theme="dark"] .legal-bar--brand {
   background: linear-gradient(180deg, var(--brand) 0%, var(--brand-2) 100%);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   RIRI — the customer's first contact, operated as a handset.
+   ═════════════════════════════════════════════════════════════════════════════
+   Ported from the lender console's ServiceSuite OS (connected-suite/src/app/
+   globals.css, "The device") so a customer and the officer who answers them are
+   holding the same object: a floating bubble bottom-right, a phone that opens out
+   of it, a real home button, apps on a wallpaper in the lender's colour.
+
+   The console paints on `bg-paper` and an `ash` scale; this app has its own seven
+   tokens and a dark theme the console's dock never had. So the device's glass is
+   one more token here — --os-paper — solid in both themes, because a chat that
+   the page's photograph shows through is a chat nobody can read in the sun. */
+:root {
+  --os-paper: #ffffff;
+  --os-paper-soft: rgb(255 255 255 / 0.78);
+  --os-bubble: #f1f4fa;
+  --os-home-face: linear-gradient(160deg, #f8fafc, #e2e8f0);
+}
+[data-theme="dark"] {
+  --os-paper: #0b1020;
+  --os-paper-soft: rgb(11 16 32 / 0.8);
+  --os-bubble: rgb(255 255 255 / 0.06);
+  --os-home-face: linear-gradient(160deg, #283048, #151a2a);
+}
+
+@theme inline {
+  --color-paper: var(--os-paper);
+}
+
+@keyframes riri-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-0.6px) scale(1.012); }
+}
+@keyframes riri-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+  97% { transform: scaleY(1); }
+}
+@keyframes riri-halo {
+  0% { transform: scale(0.85); opacity: 0.55; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes riri-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes riri-think {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes riri-orbit {
+  from { transform: rotate(0deg) translateX(26px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(26px) rotate(-360deg); }
+}
+.riri-breathe { transform-box: fill-box; transform-origin: center; animation: riri-breathe 4.5s ease-in-out infinite; }
+.riri-eye { transform-box: fill-box; transform-origin: center; animation: riri-blink 5.4s ease-in-out infinite; }
+.riri-thinking .riri-eye { animation-duration: 2.6s; }
+.riri-halo { animation: riri-halo 2.4s ease-out infinite; }
+.riri-float { animation: riri-float 4.5s ease-in-out infinite; }
+.riri-think-dot { animation: riri-think 1.2s ease-in-out infinite; }
+.riri-orbit-dot { animation: riri-orbit 1.5s linear infinite; }
+
+/* The titanium band: a hard specular edge, a soft body, a shadowed inner lip. */
+.os-frame {
+  background: linear-gradient(160deg, #4b4f57 0%, #23262b 18%, #14161a 48%, #23262b 82%, #55595f 100%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.12) inset,
+    0 1px 0 rgb(255 255 255 / 0.22) inset,
+    0 40px 90px -22px rgb(0 0 0 / 0.62),
+    0 12px 28px -10px rgb(0 0 0 / 0.42);
+}
+.os-glass {
+  background: var(--os-paper);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55) inset, 0 2px 14px rgb(0 0 0 / 0.28) inset;
+}
+.os-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(147deg, rgb(255 255 255 / 0.45) 0%, rgb(255 255 255 / 0.06) 22%, transparent 44%);
+  mix-blend-mode: overlay;
+}
+@keyframes os-aurora {
+  0% { transform: translate3d(-6%, -4%, 0) scale(1.08); }
+  50% { transform: translate3d(6%, 5%, 0) scale(1.16); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1.08); }
+}
+.os-aurora { animation: os-aurora 26s ease-in-out infinite; }
+@keyframes os-home-press {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.os-home-press { animation: os-home-press 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes os-breathe-dim {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.os-live { animation: os-breathe-dim 2.6s ease-in-out infinite; }
+@keyframes os-badge-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.os-badge { animation: os-badge-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes dock-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.dock-pulse { animation: dock-pulse 1.8s ease-in-out infinite; }
+
+/* The Riri bubble in a conversation and the customer's own. The customer's takes
+   the lender's fill, exactly as the console's officer's does. */
+.os-bubble-riri {
+  background: var(--os-bubble);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.os-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.os-scroll::-webkit-scrollbar { width: 6px; }
+.os-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+
+/* "Riri brought you here because you asked…" — plan §06, the third rule. */
+.why-here {
+  background: color-mix(in oklab, var(--brand) 10%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--brand) 28%, var(--line));
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .riri-breathe, .riri-eye, .riri-halo, .riri-float, .riri-think-dot, .riri-orbit-dot,
+  .os-aurora, .os-home-press, .os-live, .os-badge, .dock-pulse {
+    animation: none;
+  }
+}

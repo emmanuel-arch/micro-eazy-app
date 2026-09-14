@@ -83,6 +83,40 @@ const screen = params.get("screen");
 installMocks(screen ?? "home");
 const script = params.get("drive");
 if (script) void drive(script);
+
+// ── Riri's dock ───────────────────────────────────────────────────────────────
+//   &riri=open                     the device open on the conversation
+//   &riri=open&ask=What%20do%20I%20owe%3F   …with a question already asked
+//   &riri=nudge                    the first-run greeting beside the bubble
+//   &riri=home                     the device's home screen
+{
+  const riri = params.get("riri");
+  try {
+    localStorage.setItem("me.riri.greeted", riri === "nudge" ? "0" : "1");
+    localStorage.setItem("me.riri.open", riri === "open" || riri === "home" ? "1" : "0");
+    localStorage.setItem("me.riri.start", riri === "home" ? "home" : "ask");
+  } catch {
+    /* private mode */
+  }
+  // &why=1 — the "Riri brought you here because you asked…" bar, as a hand-off lands.
+  if (params.get("why")) {
+    void import("./lib/riri/whyHere").then(({ setWhyHere }) =>
+      setWhyHere({ question: "Where do customers repay?", from: "Riri", via: params.get("why") === "console" ? "the lending console" : undefined, path: location.pathname }),
+    );
+  }
+  // &riri=open&press=home — press the device's home button, the way a person would.
+  if (params.get("press") === "home") {
+    window.setTimeout(() => (document.querySelectorAll('button[aria-label="Home"]')[1] as HTMLButtonElement | undefined)?.click(), 2500);
+  }
+  const asks = params.getAll("ask");
+  if (asks.length) {
+    let delay = 1400;
+    for (const q of asks) {
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("riri:open", { detail: { prompt: q } })), delay);
+      delay += 1400;
+    }
+  }
+}
 const PHONE = { phone: "0758517032" };
 
 const DOORS: Record<string, { path: string; entry: string; element: React.ReactNode; state?: unknown }> = {

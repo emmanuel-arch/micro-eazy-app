@@ -18,12 +18,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquarePlus, RefreshCw, Inbox, ChevronRight } from "lucide-react";
+import { Sparkles, RefreshCw, Inbox, ChevronRight, UserRound } from "lucide-react";
 import { Sky } from "../components/shell/Sky";
 import { LiquidButton } from "../components/ui/LiquidButton";
+import { RiriAvatar } from "../components/riri/RiriAvatar";
 import { sinceNow } from "../lib/format";
 import { myThreads, type ThreadSummary } from "../lib/api/portal";
 import { SAMPLE_THREADS } from "../lib/api/samples";
+import { openRiri } from "../lib/riri/whyHere";
 
 export default function Messages() {
   const go = useNavigate();
@@ -78,7 +80,7 @@ export default function Messages() {
               </span>
               <p className="mt-3 text-[15px] font-semibold">No messages yet</p>
               <p className="mt-1.5 max-w-[38ch] text-[12.5px] leading-relaxed text-ink-faint">
-                If anything about your account or an application is unclear, write to us here. A real person answers,
+                Ask Riri anything about your account first. If it needs a person, she opens the conversation with the team,
                 and their reply lands on this screen.
               </p>
             </section>
@@ -132,21 +134,34 @@ export default function Messages() {
         </div>
 
         <aside className="mt-3 space-y-3 xl:mt-0">
+          {/* ── RIRI FIRST ─────────────────────────────────────────────────
+              This was "Write to us", straight into an officer's queue. Riri answers
+              first now (plan §07): most questions end here in seconds, and the ones
+              that need a person arrive with her working shown, in this list. */}
           <section className="card p-5">
-            <p className="text-[13px] font-semibold">Start a conversation</p>
-            <p className="mt-1.5 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
-              Ask about an application, a repayment, or your ID check. Nothing you write here changes a decision on its
-              own — it reaches the person who can look at it.
+            <div className="flex items-center gap-3">
+              <span className="h-11 w-11 shrink-0 overflow-hidden rounded-full shadow ring-2 ring-white">
+                <RiriAvatar size={44} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold">Ask Riri first</p>
+                <p className="text-[11.5px] text-ink-faint">Answers from your own account, in seconds</p>
+              </div>
+            </div>
+            <p className="mt-3 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
+              Your balance, your next payment, your application, Ratiba — ask her. If it needs a person, she hands it to the
+              team with what she already checked, and the conversation appears here.
             </p>
-            <LiquidButton
-              size="md"
-              icon={MessageSquarePlus}
-              block
-              className="mt-4"
-              onClick={() => go("/messages/new")}
-            >
-              Write to us
+            <LiquidButton size="md" icon={Sparkles} block className="mt-4" onClick={() => openRiri()}>
+              Ask Riri
             </LiquidButton>
+            <button
+              type="button"
+              onClick={() => openRiri({ prompt: "I want to talk to a person" })}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-semibold text-ink-soft transition-colors hover:text-ink"
+            >
+              <UserRound className="h-3.5 w-3.5" /> I'd rather talk to a person
+            </button>
           </section>
         </aside>
       </div>
