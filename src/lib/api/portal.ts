@@ -31,9 +31,8 @@ import { apiFetch, SLOW_TIMEOUT } from "../net/transport";
 import type { Product } from "../quote";
 
 // ── THE SLUG, AND WHY `??` WAS THE WRONG OPERATOR ───────────────────────────
-// This read `import.meta.env.VITE_LENDER_SLUG ?? "micromart"`, and the build
-// running on portal.servicesuitecloud.com today ships `lenderSlug: ""` on every
-// call. `??` only catches null and undefined. Vite inlines an env var that is
+// This read `import.meta.env.VITE_LENDER_SLUG ?? "micromart"`, and a live build
+// shipped `lenderSlug: ""` on every call. `??` only catches null and undefined. Vite inlines an env var that is
 // SET BUT EMPTY as the empty string, so `"" ?? "micromart"` is `""` — the
 // fallback never fires, and the suite answers 400 "Choose a lender" to a
 // customer who did nothing wrong.
@@ -1121,8 +1120,11 @@ export type ChargeWhen = "before-disbursement" | "on-disbursement" | "on-repayme
 
 export type PrecheckAnswer =
   | { success: true; route: "new" | "local" | "fintech"; lender: string }
-  | { success: true; route: "africa-active" | "africa-portal"; lender: string; portalUrl: string }
-  | { success: true; route: "africa-pipeline"; lender: string; portalUrl: string; eligibleOn: string | null; daysRemaining: number | null }
+  // Micromart Africa customers are pointed at customer SUPPORT, never at another
+  // app. `support` is optional only so a bundle that outlives the server change
+  // still renders — the screens fall back to AFRICA_SUPPORT_PHONE.
+  | { success: true; route: "africa-active" | "africa-portal"; lender: string; support?: { phone: string; email: string } }
+  | { success: true; route: "africa-pipeline"; lender: string; support?: { phone: string; email: string }; eligibleOn: string | null; daysRemaining: number | null }
   | { success: true; route: "both"; lender: string; caseRef: string; support: { phone: string; email: string } }
   | { success: true; route: "unreachable"; lender: string; message: string };
 

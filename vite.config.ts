@@ -23,14 +23,13 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     tailwindcss(),
-    // ── THIS APP TAKES OVER AN ORIGIN THAT ALREADY HAS A SERVICE WORKER ──────
-    // portal.servicesuitecloud.com is serving the previous PWA today, and that
-    // build registers a workbox worker at scope '/' which PRECACHES the app
-    // shell. A service worker is not replaced by deploying different files: it
-    // is replaced by a new worker at the same scope. Ship this app without one
-    // and every device that already opened the old app keeps being served the
-    // old app from Cache Storage — permanently, and precisely for the customers
-    // who use it most, the ones who installed it.
+    // ── THIS APP'S WORKER MUST BE ABLE TO REPLACE ITS PREDECESSOR ─────────────
+    // This app lives at microeazy.servicesuitecloud.com. Any origin an app has
+    // served from keeps a workbox worker at scope '/' that PRECACHES the shell,
+    // and a service worker is not replaced by deploying different files: it is
+    // replaced by a new worker at the same scope. Ship without one and every
+    // device that already opened the old build keeps being served it from Cache
+    // Storage — permanently, and precisely for the customers who installed it.
     //
     // So the worker below is not a feature. It is the mechanism by which the
     // replacement actually reaches a handset.

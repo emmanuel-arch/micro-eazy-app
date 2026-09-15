@@ -14,8 +14,8 @@
 //   new / local       send the code under the lender's sender id → onboarding
 //   fintech           an account already exists → the sign-in page, number filled
 //                     in, asking only for the password (or a new one)
-//   africa-active     their loan is on the field book → the lender's own loading
-//   africa-portal     screen, then Micromart's main customer portal
+//   africa-active     their account is on the field book → call customer support
+//   africa-portal     (a panel with the number; no link to any other app)
 //   africa-pipeline   settled, crossing soon → a countdown to the day, and a text
 //   both              two accounts → a case already raised, and who to call
 //   unreachable       we could not ask → retry, never "you are new"
@@ -23,24 +23,19 @@
 // It grants nothing. Onboarding is still behind the session, the KYC endpoint
 // still demands one, and the lender's rules still run on the server.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Info, LogIn } from "lucide-react";
 import { AuthLayout } from "../components/shell/AuthLayout";
 import { PhoneField, looksLikeAPhone } from "../components/auth/PhoneField";
 import { DoorOutcome } from "../components/auth/DoorOutcome";
-import { Splash } from "../components/shell/Splash";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { precheck, type PrecheckAnswer } from "../lib/api/portal";
 import { useLender } from "../lib/lender";
 import { useSession } from "../lib/session";
 
-type Panel = Extract<PrecheckAnswer, { route: "africa-pipeline" | "both" | "unreachable" }>;
-
-/** How long the lender's loading screen stays up before the hand-off — long
- *  enough to read "Taking you to your Micromart account", short enough not to wait. */
-const HANDOFF_MS = 1800;
+type Panel = Extract<PrecheckAnswer, { route: "africa-active" | "africa-portal" | "africa-pipeline" | "both" | "unreachable" }>;
 
 function localLabel(raw: string): string {
   const d = raw.replace(/\D/g, "").replace(/^254/, "").replace(/^0/, "");
@@ -57,18 +52,8 @@ export default function LenderWelcome() {
   const [busy, setBusy] = useState<null | "checking" | "sending">(null);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [handoff, setHandoff] = useState<string | null>(null);
 
   const ok = looksLikeAPhone(phone);
-
-  // ── THE HAND-OFF TO THE OTHER PORTAL ───────────────────────────────────────
-  // The lender's own loading screen, then the navigation — so the customer is
-  // carried, not dropped onto somebody else's URL mid-sentence.
-  useEffect(() => {
-    if (!handoff) return;
-    const t = setTimeout(() => window.location.assign(handoff), HANDOFF_MS);
-    return () => clearTimeout(t);
-  }, [handoff]);
 
   async function sendCode() {
     setBusy("sending");
@@ -117,11 +102,6 @@ export default function LenderWelcome() {
         setBusy(null);
         navigate(`/${lender.slug}/signin`, { state: { phone, precheck: "fintech" } });
         return;
-      case "africa-active":
-      case "africa-portal":
-        setBusy(null);
-        setHandoff(answer.portalUrl);
-        return;
       default:
         setBusy(null);
         setPanel(answer);
@@ -133,10 +113,6 @@ export default function LenderWelcome() {
     setTouched(true);
     if (!ok || busy) return;
     await check();
-  }
-
-  if (handoff) {
-    return <Splash livery="lender" label={`Taking you to your ${lender.short} account…`} />;
   }
 
   return (

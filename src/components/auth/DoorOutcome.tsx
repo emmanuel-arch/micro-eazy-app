@@ -9,25 +9,28 @@
 // These panels are the doors. Each one says what is true in one sentence and
 // then offers exactly the actions that fix it, with the most useful one first:
 //
+//   other book   the number is on Micromart Africa's book → call customer support
+//                (no link to any other app — the two apps are not linked)
 //   pipeline     a countdown to the day they cross to Fintech, the date we will
-//                text them, and the portal they can use until then
+//                text them, and customer support if they need a loan before then
 //   both         a case reference already raised, and the two ways to reach IT
 //   unreachable  try again — and an explicit promise that nothing is wrong with
 //                the number, because "we could not check" read as a refusal is
 //                how a duplicate account gets opened
 //
-// The two answers that need no reading at all — an existing Fintech account, and
-// a live loan on the field book — are not panels: the first becomes the sign-in
-// page with the number already filled in, the second is carried to the other
-// portal behind the lender's own loading screen.
+// The one answer that needs no reading at all — an existing Fintech account — is
+// not a panel: it becomes the sign-in page with the number already filled in.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowUpRight, BellRing, CalendarCheck, LifeBuoy, Mail, Phone, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
+import { ArrowLeft, BellRing, CalendarCheck, LifeBuoy, Mail, Phone, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { LiquidButton } from "../ui/LiquidButton";
 import type { PrecheckAnswer } from "../../lib/api/portal";
 import { longDate } from "../../lib/format";
 
-type Panel = Extract<PrecheckAnswer, { route: "africa-pipeline" | "both" | "unreachable" }>;
+type Panel = Extract<PrecheckAnswer, { route: "africa-active" | "africa-portal" | "africa-pipeline" | "both" | "unreachable" }>;
+
+/** Micromart customer support — used if the server's answer carries none. */
+const AFRICA_SUPPORT_PHONE = "0740961275";
 
 const enter = { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 }, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -57,6 +60,17 @@ export function DoorOutcome({
         Use a different number
       </button>
 
+      {(outcome.route === "africa-active" || outcome.route === "africa-portal") && (
+        <section>
+          <Glyph tone="brand"><LifeBuoy className="h-5 w-5" strokeWidth={2.2} /></Glyph>
+          <h1 className="mt-4 text-[26px] font-bold leading-[1.15] tracking-[-0.025em] text-ink">Your account is with {lenderShort} Africa.</h1>
+          <p className="mt-3 max-w-[42ch] text-[14px] leading-relaxed text-ink-soft">
+            {phoneLabel} is registered on {lenderShort}'s field book, so an account cannot be opened for it here.{" "}
+            <strong className="font-semibold text-ink">Please contact {lenderShort} customer support</strong> and they will help you with your loans.
+          </p>
+          <SupportCall phone={outcome.support?.phone ?? AFRICA_SUPPORT_PHONE} />
+        </section>
+      )}
       {outcome.route === "africa-pipeline" && <Pipeline outcome={outcome} lenderShort={lenderShort} phoneLabel={phoneLabel} />}
       {outcome.route === "both" && <BothBooks outcome={outcome} lenderShort={lenderShort} phoneLabel={phoneLabel} />}
       {outcome.route === "unreachable" && (
@@ -165,18 +179,26 @@ function Pipeline({ outcome, lenderShort, phoneLabel }: { outcome: Extract<Panel
         </p>
       </div>
 
-      <a
-        href={outcome.portalUrl}
-        className="mt-5 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 transition-colors hover:bg-surface-sunk"
-        style={{ borderColor: "var(--line-strong)" }}
-      >
-        <span className="min-w-0">
-          <span className="block text-[13.5px] font-semibold text-ink">Need a loan before then?</span>
-          <span className="mt-0.5 block text-[12px] text-ink-faint">Use {lenderShort}'s main customer portal meanwhile.</span>
-        </span>
-        <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={2.4} />
-      </a>
+      <p className="mt-5 text-[13.5px] font-semibold text-ink">Need a loan before then?</p>
+      <SupportCall phone={outcome.support?.phone ?? AFRICA_SUPPORT_PHONE} />
     </section>
+  );
+}
+
+/** Customer support as a tap-to-call row — the only way out of these panels. */
+function SupportCall({ phone }: { phone: string }) {
+  return (
+    <a
+      href={`tel:${phone.replace(/\s/g, "")}`}
+      className="mt-3 flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition-colors hover:bg-surface-sunk"
+      style={{ borderColor: "var(--line-strong)" }}
+    >
+      <Phone className="h-4 w-4 shrink-0" style={{ color: "var(--brand-ink)" }} strokeWidth={2.2} />
+      <span className="min-w-0">
+        <span className="block text-[12px] text-ink-faint">Customer support</span>
+        <span className="tnum block text-[15px] font-semibold text-ink">{phone}</span>
+      </span>
+    </a>
   );
 }
 
