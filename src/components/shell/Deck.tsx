@@ -235,23 +235,39 @@ export function Deck({
   // finger drifting sideways while scrolling a pane does not page it.
   const touch = useRef<{ x: number; y: number } | null>(null);
 
+  // ── THE PAGER IS THE MOST IMPORTANT CONTROL ON A SIDEWAYS SCREEN ──────────
+  // It is the only thing on the page that says there IS more, and the only
+  // thing that moves you to it. Drawn at the size of a footnote, in a strip
+  // under the content, customers simply did not see it — they read the pane in
+  // front of them and concluded that was the screen.
+  //
+  // So it is set at a size that matches its job: 40px targets instead of 32,
+  // dots that are pills rather than specks, a real border and a panel behind
+  // the whole group so it reads as one control rather than three loose pieces
+  // floating over the page. The "next" button keeps the label — naming the pane
+  // it goes to is what teaches the gesture the first time — and is now filled in
+  // the brand colour, because on a screen with one obvious next action that
+  // action should look like one.
   const pager =
     count < 2 ? null : (
-      <div className="flex items-center gap-2.5">
+      <div
+        className="flex items-center gap-2 rounded-full border px-2 py-1.5 shadow-sm"
+        style={{ borderColor: "var(--line)", background: "var(--surface)" }}
+      >
         <button
           type="button"
           onClick={() => setAt((i) => clamp(i - 1))}
           disabled={at === 0}
           aria-label="Previous panel"
-          className="grid h-8 w-8 place-items-center rounded-full border text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink disabled:pointer-events-none disabled:opacity-35"
+          className="grid h-10 w-10 place-items-center rounded-full border text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink disabled:pointer-events-none disabled:opacity-30"
           style={{ borderColor: "var(--line-strong)" }}
         >
-          <ChevronLeft className="h-4 w-4" strokeWidth={2.4} />
+          <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={2.4} />
         </button>
 
         {/* The steps are BUTTONS. Three panes is few enough that going straight
             to the one you want beats pressing next twice. */}
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2 px-1">
           {panes.map((p, i) => (
             <button
               key={p.id}
@@ -276,27 +292,27 @@ export function Deck({
             rather than wrapping round to the first pane as though the road ended. */}
         {at >= ceiling && ceiling < count - 1 ? (
           <span
-            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold text-ink-faint"
+            className="flex h-10 items-center gap-1.5 rounded-full border px-4 text-[13px] font-semibold text-ink-faint"
             style={{ borderColor: "var(--line)" }}
             aria-disabled
           >
-            <Lock className="h-3 w-3 shrink-0" strokeWidth={2.4} />
-            <span className="max-w-[16ch] truncate">{panes[at + 1]?.label}</span>
+            <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
+            <span className="max-w-[18ch] truncate">{panes[at + 1]?.label}</span>
           </span>
         ) : (
           <button
             type="button"
             onClick={() => setAt((i) => (i >= ceiling ? 0 : i + 1))}
-            className="group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
-            style={{ borderColor: "var(--line-strong)" }}
+            className="group flex h-10 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-opacity hover:opacity-90"
+            style={{ background: "var(--brand)", color: "var(--brand-on)" }}
           >
-            <span className="max-w-[16ch] truncate">
+            <span className="max-w-[18ch] truncate">
               {at >= ceiling ? panes[0].label : panes[at + 1].label}
             </span>
             {at >= ceiling ? (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
+              <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
             ) : (
-              <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
+              <ChevronsRight className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.4} />
             )}
           </button>
         )}

@@ -875,16 +875,26 @@ button:hover > .brand-plate {
    "There is more, and it is that way." It sits in the footer bar rather than
    floating over the content, because it is chrome about the WHOLE screen and
    chrome belongs at the edge of the frame. */
+/* The dots. Sized UP from 6px to 10px, with the active one drawn as a 32px
+   pill: at 6px they read as punctuation on a screen a customer is not expecting
+   to move sideways, which is exactly the population that needs to see them. A
+   dot is also a target — 10px with a 12px hit area either side clears the
+   minimum a thumb can hit on a tablet in landscape. */
 .deck-step {
-  height: 0.375rem;
-  width: 0.375rem;
+  height: 0.625rem;
+  width: 0.625rem;
   border-radius: 9999px;
   background: var(--line-strong);
   transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), background-color 320ms ease;
 }
 
+.deck-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .deck-step[aria-current="true"] {
-  width: 1.5rem;
+  width: 2rem;
   background: var(--brand-ink);
 }
 

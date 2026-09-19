@@ -6,22 +6,41 @@
 // is that shape, once.
 //
 //   ┌ Sky: the step's title · what happens here · ▬▬▬▭▭ 3/6 ┐
-//   │ ┌ the deck ─────────────────────────┐ ┌ the road ──────┐ │
-//   │ │ pane = the step in hand           │ │ ✓ done         │ │
-//   │ │                                   │ │ ● this one     │ │
-//   │ │                                   │ │ 🔒 still ahead  │ │
-//   │ └───────────────────────────────────┘ │ Why we ask     │ │
-//   └────────────────────────────────────────└────────────────┘─┘
+//   │  ① Standing  ② Product  ③ Amount  ④ Term  ⑤ Schedule …  ← the rail
+//   │ ┌ the deck ──────────────────────────────────────────┐ │
+//   │ │ pane = the step in hand, full width                │ │
+//   │ └────────────────────────────────────────────────────┘ │
+//   └─────────────────────────────────────────────────────────┘
+//            ‹ ● ● ● ● ● ● ›  Loan overview »        ← the pager, below
+//
+// ── THE STEPS ARE A RAIL, NOT A COLUMN ──────────────────────────────────────
+// They used to be a 280px column down the right-hand side: a vertical list of
+// every step with ticks, locks and a "Why we ask" card underneath. Three things
+// were wrong with it, in increasing order of cost.
+//
+//   1. It took a fifth of the width of every flow, permanently, to show six
+//      short labels. On the loan-overview step that column was pushing the
+//      figures and the lender's terms into two cramped cards beside it.
+//   2. It duplicated the pager. The pager under the panes already says where
+//      you are and moves you; a second, differently-shaped control saying the
+//      same thing in the corner is two things to keep in agreement.
+//   3. It was a LIST OF STEPS drawn as a sidebar, which reads as navigation for
+//      the page rather than as progress through a flow.
+//
+// So the steps are a horizontal rail above the pane — the shape every checkout
+// in the world uses, because it is the shape that says "these happen in order
+// and you are here". It is still clickable, still clamped to `reachable`, and it
+// is in sync with the pager below because both read the same `at`.
 //
 // ── NO WALKING PAST A STEP ──────────────────────────────────────────────────
 // The deck is CONTROLLED. The screen decides which pane is in view, and every
-// control — pager, wheel, arrow keys, swipe — is clamped to `reachable`: the
-// steps already done plus the one in hand. A customer can look back at what they
-// did; nothing lets them slide past an identity check they have not passed. A
-// step the lender has not switched on is simply not in the list, so it is never
+// control — rail, pager, wheel, arrow keys, swipe — is clamped to `reachable`:
+// the steps already done plus the one in hand. A customer can look back at what
+// they did; nothing lets them slide past an identity check they have not passed.
+// A step the lender has not switched on is simply not in the list, so it is never
 // shown and never counted.
 //
-// On a phone only the step in hand is on screen, the road collapses into the
+// On a phone only the step in hand is on screen, the rail collapses into the
 // Sky's progress bar, and Back is the arrow in the Sky.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { ReactNode } from "react";
@@ -71,16 +90,101 @@ export function FlowScreen({
       <div className="shrink-0">
         <Sky title={step?.title ?? label} onBack={i > 0 ? () => onAt(i - 1) : undefined}>
           <p className="max-w-[48ch] text-[13px] leading-relaxed text-sky-ink-soft lg:truncate">{step?.blurb}</p>
+
+          {/* THE BAR IS THE PHONE'S RAIL. Below `lg` there is no width for six
+              labels, so the abstract progress bar carries the position — and
+              above `lg` it is hidden, because the rail underneath says the same
+              thing with the step names on it. Two indicators of the same value,
+              one of them vaguer, is the thing that made the old right-hand
+              column feel like clutter. */}
           {steps.length > 1 && (
-            <div className="mt-3 max-w-[560px] lg:mt-2">
+            <div className="mt-3 max-w-[560px] lg:hidden">
               <Stepper total={steps.length} index={i} />
             </div>
+          )}
+
+          {/* ── THE RAIL ─────────────────────────────────────────────────────
+              Inside the Sky, not under it. The Sky carries 3.5rem of bottom
+              padding that the content below deliberately overlaps by 3rem, so
+              anything rendered at the top of the content area lands IN that
+              overlap — which is how the first cut of this put a line of body
+              copy half behind the band's own edge.
+
+              It scrolls sideways rather than wrapping: a second row of tabs
+              appearing at step four would move the pane under the customer's
+              cursor mid-flow. The scrollbar is hidden because the rail is short
+              and the pager below is the control anyone actually reaches for. */}
+          {steps.length > 1 && (
+            <nav
+              aria-label={`${label} steps`}
+              className="mt-3 hidden items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] lg:flex"
+            >
+              {steps.map((s, n) => {
+                // `reachable` is the step in progress, so everything before it is done.
+                const now = n === i;
+                const done = n < reachable && !now;
+                const open = n <= reachable;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={!open}
+                    aria-current={now ? "step" : undefined}
+                    onClick={() => onAt(n)}
+                    title={open ? s.blurb : "Finish the steps before this one first"}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                      now
+                        ? "border-transparent bg-white text-[color:var(--navy-deep)] shadow-sm"
+                        : open
+                          ? "border-white/25 text-sky-ink-soft hover:border-white/45 hover:bg-white/10 hover:text-sky-ink"
+                          : "cursor-not-allowed border-white/10 text-sky-ink-soft opacity-45"
+                    }`}
+                  >
+                    {/* The step's standing, in the 17px before its name: a tick
+                        once it is behind you, a lock while it is still shut, and
+                        its number the rest of the time. */}
+                    <span
+                      aria-hidden
+                      className={`grid h-[17px] w-[17px] shrink-0 place-items-center rounded-full text-[9.5px] font-bold ${
+                        now ? "" : done ? "" : "bg-white/15 text-sky-ink"
+                      }`}
+                      style={
+                        done
+                          ? { background: "var(--lime)", color: "var(--navy-deep)" }
+                          : now
+                            ? { background: "color-mix(in oklab, var(--navy-deep) 12%, transparent)", color: "var(--navy-deep)" }
+                            : undefined
+                      }
+                    >
+                      {done ? <Check className="h-3 w-3" strokeWidth={3} /> : !open && s.required ? <Lock className="h-[9px] w-[9px]" strokeWidth={2.6} /> : n + 1}
+                    </span>
+                    <span className="whitespace-nowrap">{s.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* WHY THIS STEP CANNOT BE SKIPPED — one line under the rail, where
+              the card in the old right-hand column used to say it at four times
+              the size. It is a footnote to the step in hand, not a panel, so it
+              costs the flow one line instead of a fifth of the screen. */}
+          {/* `mb-6` is load-bearing, not spacing taste. The Sky carries 3.5rem
+              of bottom padding and the content below overlaps it by 3rem, so
+              the last 48px of this band is under a card. Without the margin this
+              line sits in that strip and is read with its lower half behind the
+              first card — which is how it looked before the margin existed. */}
+          {step?.why && (
+            <p className="mt-2.5 mb-6 hidden items-start gap-1.5 text-[11.5px] leading-snug text-sky-ink-soft lg:flex">
+              <Info className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+              <span className="min-w-0">{step.why}</span>
+            </p>
           )}
         </Sky>
       </div>
 
-      <div className="relative z-10 -mt-12 flex min-h-0 flex-1 flex-col px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-h-0 flex-col lg:h-full">
+      <div className="relative z-10 -mt-12 flex min-h-0 flex-1 flex-col px-4">
+        <div className="flex min-h-0 flex-1 flex-col">
           <Deck
             label={label}
             panes={steps.map((s) => ({ id: s.id, label: s.label, node: s.node }))}
@@ -91,72 +195,10 @@ export function FlowScreen({
           />
         </div>
 
-        <aside className="hidden min-h-0 space-y-3 overflow-y-auto pb-2 [scrollbar-width:none] lg:block">
-          <section className="card overflow-hidden">
-            <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--line)" }}>
-              <p className="text-[13px] font-semibold">{label}</p>
-              <span className="tnum text-[11.5px] text-ink-faint">
-                {i + 1} of {steps.length}
-              </span>
-            </div>
-            <ol className="px-2 py-2">
-              {steps.map((s, n) => {
-                // `reachable` is the step in progress, so everything before it is done.
-                const now = n === i;
-                const done = n < reachable && !now;
-                const open = n <= reachable;
-                return (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      disabled={!open || now}
-                      onClick={() => onAt(n)}
-                      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-[7px] text-left transition-colors enabled:hover:bg-surface-sunk"
-                    >
-                      <span
-                        aria-hidden
-                        className="mt-px grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[10px] font-bold"
-                        style={
-                          done
-                            ? { background: "var(--lime)", color: "var(--navy-deep)" }
-                            : now
-                              ? { background: "var(--brand)", color: "var(--brand-on)" }
-                              : { background: "var(--surface-sunk)", color: "var(--ink-faint)" }
-                        }
-                      >
-                        {done ? <Check className="h-3 w-3" strokeWidth={3} /> : n + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={`block text-[12.5px] leading-snug ${now ? "font-semibold text-ink" : open ? "text-ink-soft" : "text-ink-faint"}`}>
-                          {s.label}
-                        </span>
-                        {now && <span className="mt-0.5 block text-[11px] leading-snug text-ink-faint">{s.blurb}</span>}
-                      </span>
-                      {!open && s.required && <Lock className="mt-0.5 h-3 w-3 shrink-0 text-ink-faint" strokeWidth={2.2} aria-label="Required" />}
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          {step?.why && (
-            <section className="card p-4">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-xl"
-                  style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
-                >
-                  <Info className="h-4 w-4" strokeWidth={2.2} />
-                </span>
-                <p className="text-[13px] font-semibold">Why we ask</p>
-              </div>
-              <p className="mt-2.5 text-[12px] leading-relaxed text-ink-soft">{step.why}</p>
-            </section>
-          )}
-
-          {aside}
-        </aside>
+        {/* Screens that hung extra cards under the road still get to render
+            them; there is simply no column for them to sit in, so they go below
+            the pane where the flow has already been read. */}
+        {aside && <div className="mt-2 hidden shrink-0 lg:block">{aside}</div>}
       </div>
     </div>
   );

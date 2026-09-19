@@ -318,7 +318,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 page ground. `lg:empty:hidden` collapses the slot to nothing on a
                 screen with no deck, so a single-pane screen gets no gap for a
                 pager it does not have. */}
-            <div ref={setPagerSlot} className="hidden shrink-0 justify-center pb-1.5 pt-2 lg:flex lg:empty:hidden" />
+            <div ref={setPagerSlot} className="hidden shrink-0 justify-center pb-2.5 pt-3 lg:flex lg:empty:hidden" />
           </div>
         </div>
       </div>
