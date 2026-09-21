@@ -34,7 +34,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
+import { LiquidButton } from "../components/ui/LiquidButton";
 import { useLender } from "../lib/lender";
 import { useSession } from "../lib/session";
 import { ThemeToggle } from "../components/shell/ThemeToggle";
@@ -266,6 +267,25 @@ export default function LenderVerify() {
               {notice}
             </p>
           )}
+
+          {/* The code submits itself on the sixth digit; this is the same
+              commit as a button, in the lender's glass, for anybody who pasted
+              a code and looked for somewhere to press — and so the three
+              sign-ins Micromart is shown end on the same object. Inert until
+              the code is whole. */}
+          <LiquidButton
+            type="submit"
+            variant="solid"
+            size="lg"
+            block
+            trailingIcon={ArrowRight}
+            loading={busy}
+            disabled={busy || code.length !== LENGTH}
+            tone={{ fill: "var(--brand)", rim: "var(--brand-2)", ink: "var(--brand-on)" }}
+            className="mt-6"
+          >
+            {busy ? "Checking the code" : "Verify & sign in"}
+          </LiquidButton>
         </form>
 
         <p className="mt-8 text-[12.5px] text-ink-faint">

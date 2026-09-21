@@ -73,6 +73,7 @@ import {
   getSession,
   micromartResetPassword,
   micromartSignIn,
+  prefetchHome,
   sendOtp,
   signOut as apiSignOut,
   verifyOtp,
@@ -301,9 +302,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!r.success) {
         return { ok: false, reason: r.reason, reachable: r.reachable !== false, message: r.message ?? "That did not match." };
       }
+      // Start Home's read NOW, before the route change, so the request is
+      // already in flight while React swaps the door for the account. Home's
+      // loader picks up this promise instead of asking again — see
+      // prefetchHome in lib/api/portal.ts.
+      // Keyed exactly as Home will ask: by the ID this tab already holds, if any.
+      prefetchHome(readStoredId() ?? "");
       setStatus("verified");
       setPhoneMasked(maskLocal(phone));
-      if (r.name) setFirstName(r.name.split(/s+/)[0] ?? null);
+      if (r.name) setFirstName(r.name.split(/\s+/)[0] ?? null);
       // A customer who signed in with a Micromart password IS a Micromart
       // customer — that is what the password proves. Recording it here stops
       // the app offering them onboarding they finished years ago.

@@ -23,6 +23,7 @@
 //   /preview.html?screen=kyc              KYC verification, on canned answers
 //   /preview.html?screen=crunch           the statement cruncher
 //   /preview.html?screen=apply            Apply now
+//   /preview.html?screen=help             Help & FAQs (Home's old second pane)
 //
 //   &drive=<script>  clicks through to a later pane — see preview-mocks.ts
 //   &theme=dark   &wallpaper=none   &pane=1
@@ -40,6 +41,7 @@ import { ThemeProvider } from "./lib/theme";
 import { LenderThemeProvider, setLenderSlug } from "./lib/lender";
 import { SessionProvider } from "./lib/session";
 import Home from "./screens/Home";
+import Help from "./screens/Help";
 import LenderChoice from "./screens/LenderChoice";
 import LenderVerify from "./screens/LenderVerify";
 import LenderWelcome from "./screens/LenderWelcome";
@@ -151,7 +153,8 @@ function Body() {
   }
 
   setLenderSlug("micromart");
-  const flow = screen === "kyc" ? <Kyc /> : screen === "crunch" ? <Cruncher /> : screen === "apply" ? <ApplyNow /> : null;
+  const flow =
+    screen === "kyc" ? <Kyc /> : screen === "crunch" ? <Cruncher /> : screen === "apply" ? <ApplyNow /> : screen === "help" ? <Help /> : null;
   return (
     <BrowserRouter>
       <SessionProvider>

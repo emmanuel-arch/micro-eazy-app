@@ -1186,7 +1186,9 @@ a:hover > .letterhead {
   width: 100%;
   border-radius: 0.875rem;
   border: 1.5px solid var(--line-strong);
-  background: var(--surface-sunk);
+  /* --surface, not --surface-sunk: the sunk tone is a pale blue-grey that read
+     as the browser's autofill blue on the one screen that must look finished. */
+  background: var(--surface);
   font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -1491,4 +1493,67 @@ a:hover > .letterhead {
   .os-aurora, .os-home-press, .os-live, .os-badge, .dock-pulse {
     animation: none;
   }
+}
+
+/* ── AUTOFILL WITHOUT THE BLUE ────────────────────────────────────────────────
+   Chrome paints an autofilled field #e8f0fe from a UA rule marked !important,
+   which no author rule can outrank — so the phone and password fields on the
+   sign-in door turned into pale blue slabs inside their own white frames the
+   moment the browser filled them. The one layer of the cascade above
+   UA-important is a TRANSITION: the autofill colours are applied, but they take
+   a week to arrive. Separate rules, because an unknown pseudo-class voids a
+   whole selector list. The staff doors carry the same rule (connected-suite
+   globals.css). */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  transition: background-color 600000s 0s, color 600000s 0s !important;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+}
+input:autofill {
+  transition: background-color 600000s 0s, color 600000s 0s !important;
+}
+
+/* THE DOTS. At 16px the bullets are specks. Larger, spaced and in the lender's
+   own colour, a typed password reads as a row of beads rather than a smudge —
+   the same treatment as the staff doors, so all three sign-ins match. */
+input[type="password"]:not(:placeholder-shown) {
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  color: var(--brand-ink, var(--ink));
+  -webkit-text-fill-color: var(--brand-ink, var(--ink));
+}
+
+/* ── THE SHEEN on LiquidButton — see components/ui/LiquidButton.tsx ──────────
+   Identical to the staff doors' GlassButton: a band of light that crosses the
+   face while the pointer is on it, then rests. */
+.liquid-btn-sheen {
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.34) 50%, transparent 70%);
+  transform: translateX(-130%);
+}
+@keyframes liquid-sheen {
+  0% { transform: translateX(-130%); }
+  42%, 100% { transform: translateX(130%); }
+}
+.liquid-btn:hover:not(:disabled) .liquid-btn-sheen {
+  animation: liquid-sheen 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+/* The lift on hover, for the two filled variants. !important because the
+   resting shadow is an inline style; :not(:active) so the press still sinks. */
+.liquid-btn[data-variant="solid"]:hover:not(:disabled):not(:active) {
+  box-shadow:
+    0 18px 36px -14px color-mix(in oklab, var(--brand) 75%, black),
+    0 0 0 5px color-mix(in oklab, var(--brand) 12%, transparent) !important;
+}
+.liquid-btn[data-variant="primary"]:hover:not(:disabled):not(:active) {
+  box-shadow:
+    0 18px 36px -14px rgb(0 0 0 / 0.45),
+    0 0 0 5px color-mix(in oklab, var(--lime) 18%, transparent) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .liquid-btn:hover .liquid-btn-sheen { animation: none; }
 }

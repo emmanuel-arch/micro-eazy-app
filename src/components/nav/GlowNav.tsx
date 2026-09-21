@@ -23,7 +23,7 @@ import { NavLink } from "react-router-dom";
 import { useLender } from "../../lib/lender";
 import {
   Home, Wallet, Gauge, FileText, User, MessageSquare, Route as RouteIcon,
-  TrendingUp, ShieldCheck, ScanFace, FileSpreadsheet, Banknote, type LucideIcon,
+  TrendingUp, ShieldCheck, ScanFace, FileSpreadsheet, Banknote, LifeBuoy, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -77,6 +77,8 @@ const KYC: NavItem = { icon: ScanFace, label: "KYC verification", to: "/kyc", gl
 const CRUNCH: NavItem = { icon: FileSpreadsheet, label: "Statement cruncher", to: "/crunch", glow: "rgba(76,183,73,0.42)", tint: "#4CB749" };
 const APPLY: NavItem = { icon: Banknote, label: "Apply now", to: "/apply", glow: "rgba(37,149,12,0.42)", tint: "#5ec22a" };
 const YOU: NavItem = { icon: User, label: "You", to: "/you", glow: "rgba(236,72,153,0.42)", tint: "#f472b6" };
+// Home's second pane until 21 Sep 2026 — see screens/Help.tsx.
+const HELP: NavItem = { icon: LifeBuoy, label: "Help & FAQs", to: "/help", glow: "rgba(14,165,233,0.42)", tint: "#38bdf8" };
 
 /** The sidebar: everything, in the order a customer's relationship runs — what
  *  is happening now, then the money, then what the lender thinks of them. */
@@ -84,7 +86,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { label: "Now", items: [HOME, KYC, CRUNCH, APPLY, TRACK, MESSAGES] },
   { label: "Money", items: [REPAY, LOANS] },
   { label: "Standing", items: [SCORE, LADDER, EXPOSURE] },
-  { label: "Account", items: [YOU] },
+  { label: "Account", items: [YOU, HELP] },
 ];
 
 /** Flattened, for anything that wants the whole list without the headings. */

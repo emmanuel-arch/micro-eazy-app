@@ -22,6 +22,21 @@ import { Phone } from "lucide-react";
  */
 export const looksLikeAPhone = (v: string) => v.replace(/\D/g, "").length >= 9;
 
+/**
+ * The field already SHOWS +254, so a full international number arriving in it —
+ * a browser's autofill of the saved "254758517032", or a paste of "+254 758…" —
+ * rendered as "+254 254758517032": the country code twice, on the screen that
+ * is meant to look finished. It is trimmed to the national part as it arrives.
+ * Typing is untouched; only a value that starts with the code AND is long
+ * enough to be a whole number is rewritten.
+ */
+function withoutCountryCode(raw: string): string {
+  const compact = raw.replace(/[\s()-]/g, "");
+  const digits = compact.replace(/\D/g, "");
+  if (/^\+?254/.test(compact) && digits.length >= 12) return digits.slice(3);
+  return raw;
+}
+
 export const PhoneField = forwardRef<
   HTMLInputElement,
   {
@@ -49,7 +64,7 @@ export const PhoneField = forwardRef<
         style={
           {
             background: "var(--surface)",
-            borderColor: bad ? "var(--line-strong)" : "var(--line)",
+            borderColor: bad ? "#e11d48" : "var(--line)",
             "--field-accent": accent,
           } as React.CSSProperties
         }
@@ -69,14 +84,14 @@ export const PhoneField = forwardRef<
           autoComplete="tel-national"
           placeholder="7XX XXX XXX"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(withoutCountryCode(e.target.value))}
           aria-invalid={bad}
           aria-describedby={bad ? `${id}-error` : undefined}
           className="tnum min-w-0 flex-1 bg-transparent py-4 text-[16px] text-ink outline-none placeholder:text-ink-faint"
         />
       </div>
       {bad && (
-        <p id={`${id}-error`} className="mt-2 text-[12.5px] text-ink-soft">
+        <p id={`${id}-error`} role="alert" className="mt-2 text-[12.5px] font-medium" style={{ color: "#e11d48" }}>
           That does not look like a full number yet — nine digits after the +254.
         </p>
       )}

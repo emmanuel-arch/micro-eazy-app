@@ -111,7 +111,7 @@ export function LiquidButton({
   }, [pressed]);
 
   const base =
-    `group relative isolate inline-flex select-none items-center justify-center gap-2 rounded-full ` +
+    `liquid-btn group relative isolate inline-flex select-none items-center justify-center gap-2 rounded-full ` +
     `font-semibold tracking-[-0.01em] touch-manipulation outline-none ` +
     `focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:ring-[var(--lime)] ` +
     `disabled:cursor-not-allowed ` +
@@ -121,6 +121,7 @@ export function LiquidButton({
     <button
       ref={ref}
       disabled={inert}
+      data-variant={variant}
       onPointerMove={track}
       onPointerDown={(e) => {
         setPressed(true);
@@ -151,8 +152,11 @@ export function LiquidButton({
         // the app is broken rather than that they missed a field. Inert drops
         // the fill entirely and takes the ink down with it; the label says why
         // ("Tick the box to continue"), so the control never has to.
+        // A NEUTRAL grey, mixed from the ink — not --surface-sunk, which is the
+        // pale blue #e6ebf6 and made a disabled Verify read as a field the
+        // browser had autofilled. The staff doors' GlassButton matches this.
         background: inert
-          ? "var(--surface-sunk)"
+          ? "color-mix(in oklab, var(--ink) 7%, var(--surface))"
           : variant === "primary"
             ? "var(--cta-fill, linear-gradient(180deg, #8fdd18 0%, var(--lime) 52%, #66ab08 100%))"
             : variant === "solid"
@@ -220,6 +224,14 @@ export function LiquidButton({
               mixBlendMode: "soft-light",
             }}
           />
+        )}
+
+        {/* The sheen — a band of light that crosses the face while the pointer
+            is on it, then rests. The staff doors' GlassButton carries the same
+            one (connected-suite/src/components/auth/GlassButton.tsx), so the
+            three sign-in buttons Micromart is shown are one object. */}
+        {variant !== "ghost" && !inert && (
+          <span aria-hidden className="liquid-btn-sheen pointer-events-none absolute inset-0 rounded-full" />
         )}
 
         {/* The hairline along the top edge. One pixel, and the single cheapest

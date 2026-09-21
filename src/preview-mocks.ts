@@ -202,7 +202,12 @@ export function installMocks(screen: string) {
     }
     if (path === "/api/portal/riri/feedback") return json({ success: true });
     if (path === "/api/portal/messages") return json({ success: true, lender: "Micromart Africa", threads: [], unread: 0 });
-    if (path === "/api/portal/session") return json({ authenticated: true, lenderSlug: "micromart", phoneMasked: "0758 ••• 032", nationalId: "31234567" });
+    // The doors are shown to somebody signed OUT — a signed-in session makes the
+    // sign-in screen forward to the account, and the preview shows nothing.
+    if (path === "/api/portal/session") {
+      if (["signin", "verify", "join", "lenders"].includes(screen)) return json({ authenticated: false });
+      return json({ authenticated: true, lenderSlug: "micromart", phoneMasked: "0758 ••• 032", nationalId: "31234567" });
+    }
     if (path === "/api/portal/journey") return json(journeyFor(screen));
     if (path === "/api/portal/home") return json({ ...SAMPLE_HOME, bookSource: screen.startsWith("apply") ? "onboarding" : SAMPLE_HOME.bookSource });
     if (path === "/api/lms/products") return json({ success: true, connected: true, lender: "Micromart Africa", products: SAMPLE_PRODUCTS });

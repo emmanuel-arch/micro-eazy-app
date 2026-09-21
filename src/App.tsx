@@ -45,6 +45,7 @@ import Thread from "./screens/Thread";
 import Track from "./screens/Track";
 import Identity from "./screens/Identity";
 import You from "./screens/You";
+import Help from "./screens/Help";
 
 /** The signed-in frame is AppShell now — the console's sidebar-to-the-top-edge
  *  layout, with the mark at the head of its own navigation. The old GlowRail and
@@ -466,6 +467,10 @@ function Shell() {
 
             <Route path="/loans" element={<RequireSession><Placeholder title="Your loans" /></RequireSession>} />
             <Route path="/you" element={<RequireSession><You /></RequireSession>} />
+            {/* Help & FAQs — Home's second pane until 21 Sep 2026. Static, so
+                it reads no endpoint and opens instantly; ?topic= picks the
+                explainer ("Read more" on Home links straight to one). */}
+            <Route path="/help" element={<RequireSession><Help /></RequireSession>} />
             <Route path="*" element={<Placeholder title="Not found" />} />
           </Routes>
       </Frame>

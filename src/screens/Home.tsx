@@ -9,27 +9,25 @@
 // text sitting directly on it looks like a splash screen; a card lifted onto it
 // looks like a bank.
 //
-// ── IT GOES SIDEWAYS NOW, NOT DOWN ──────────────────────────────────────────
-// On a laptop this screen is a DECK of two panes inside a fixed frame (see
-// components/shell/Deck.tsx and the landscape note in AppShell). It does not
-// scroll. Everything a customer opened the app for is in the first pane, on
-// screen, with the legal footer under it; the rest is one flick of the wheel
-// sideways, in the same rectangle at the same size.
+// ── ONE PANE (21 Sep 2026) ──────────────────────────────────────────────────
+// On a laptop this screen sits in the fixed frame (see components/shell/Deck.tsx
+// and the landscape note in AppShell) and does not scroll. It used to be a deck
+// of three panes — YOUR MONEY, then HELP & FAQS, then YOUR STANDING (the score
+// in full and the schedule). It is now the first pane alone:
 //
-// The panes are QUESTIONS, which is the same ordering principle the single
-// column used — it is only the axis that changed:
+//   YOUR MONEY   What can I get, why, what do I owe, what is due, who wrote to
+//                me — and anything blocking (an unverified ID, an application
+//                mid-flight). The three explainers stay as one-line rows under
+//                Messages; "Read more" opens /help at that topic.
 //
-//   1. YOUR MONEY     What can I get, why, what do I owe, what is due, who wrote
-//                     to me — and anything blocking (an unverified ID, an
-//                     application mid-flight), because a customer whose next
-//                     action is "finish your ID" must not have to go looking.
-//                     The three explainers sit here too, under Messages.
-//   2. HELP & FAQS    Each explainer in full, opened at the one "Read more"
-//                     was pressed on, and the questions people ring about.
-//   3. YOUR STANDING  The score and what moved it, and the schedule.
+// Help & FAQs is its own screen now (screens/Help.tsx, in the rail under
+// Account). The standing pane is gone: the score chip beside the limit links to
+// /score, which is the same figure with every reason behind it, and the ledger
+// is Repay's. The first screen after sign-in is the one the demo is judged on in
+// its first seconds; it should carry the money and nothing that is not.
 //
-// On a phone the deck is a plain vertical stack in exactly that order, so the
-// handset layout is unchanged and still the design target.
+// On a phone the pane is a plain vertical stack, so the handset layout is
+// unchanged and still the design target.
 //
 // ── THE NUMBER AND ITS REASON TRAVEL TOGETHER ───────────────────────────────
 // The tier badge beside "Available to borrow" used to read "Major risk" — a
@@ -47,11 +45,11 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight, Banknote, Gauge, FileText, Landmark, ChevronRight,
   CalendarClock, MessageSquareText, CloudOff, ScanFace, Route as RouteIcon,
-  PiggyBank, Smartphone, BookOpen, ChevronDown, LifeBuoy,
+  PiggyBank, Smartphone, BookOpen,
 } from "lucide-react";
 import { Sky } from "../components/shell/Sky";
-import { Deck, useDeck, type Pane } from "../components/shell/Deck";
-import { FAQS, HELP_TOPICS, helpTopic, type HelpTopicId } from "../lib/help/content";
+import { Deck, type Pane } from "../components/shell/Deck";
+import { HELP_TOPICS } from "../lib/help/content";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { Artwork } from "../components/media/Artwork";
 import { ChannelBadge } from "../components/shell/ChannelBadge";
@@ -85,14 +83,12 @@ const ACTIONS = [
 
 /**
  * ── THE THREE EXPLAINERS, ON PANE ONE ───────────────────────────────────────
- * They were moved to the second pane's right column, where most people never
- * went. They answer the three questions a call centre hears most, so they sit
- * on the first pane under Messages — compact, one row each — and "Read more"
- * slides to the help pane open at that topic. On a phone the panes are stacked
- * and the same button scrolls there. The card neither knows nor cares which.
+ * They answer the three questions a call centre hears most, so they sit under
+ * Messages — compact, one row each — and "Read more" opens Help & FAQs at that
+ * topic.
  */
-function AdviceCard({ onRead }: { onRead: (id: HelpTopicId) => void }) {
-  const { goTo } = useDeck();
+function AdviceCard() {
+  const go = useNavigate();
   return (
     <section className="card overflow-hidden">
       <div className="flex items-center gap-2.5 border-b px-5 py-3 lg:py-2.5" style={{ borderColor: "var(--line)" }}>
@@ -109,10 +105,7 @@ function AdviceCard({ onRead }: { onRead: (id: HelpTopicId) => void }) {
             </span>
             <button
               type="button"
-              onClick={() => {
-                onRead(t.id);
-                goTo("help");
-              }}
+              onClick={() => go(`/help?topic=${t.id}`)}
               className="shrink-0 rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:bg-surface-sunk"
               style={{ borderColor: "var(--line-strong)", color: "var(--brand-ink)" }}
             >
@@ -122,101 +115,6 @@ function AdviceCard({ onRead }: { onRead: (id: HelpTopicId) => void }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-/** Pane two: the topic in full, and the questions people ring about. */
-function HelpPane({ topic, onTopic }: { topic: HelpTopicId; onTopic: (id: HelpTopicId) => void }) {
-  const t = helpTopic(topic);
-  const [open, setOpen] = useState<string | null>(null);
-  return (
-    <PaneGrid
-      left={
-        <section className="card overflow-hidden">
-          <div className="flex flex-wrap gap-2 border-b px-5 py-3" style={{ borderColor: "var(--line)" }} role="tablist" aria-label="Topics">
-            {HELP_TOPICS.map((x) => {
-              const on = x.id === t.id;
-              return (
-                <button
-                  key={x.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => onTopic(x.id)}
-                  className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
-                  style={{
-                    borderColor: on ? "transparent" : "var(--line-strong)",
-                    background: on ? "var(--brand-soft)" : "transparent",
-                    color: on ? "var(--brand-ink)" : "var(--ink-soft)",
-                  }}
-                >
-                  {x.title}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex gap-4 p-5 lg:p-4" role="tabpanel">
-            <Artwork slot={t.slot} motif={t.motif} rounded="rounded-xl" className="hidden !h-[120px] !w-[120px] shrink-0 sm:block" />
-            <div className="min-w-0">
-              <h2 className="text-[17px] font-bold tracking-[-0.015em]">{t.title}</h2>
-              <div className="mt-2 space-y-2 text-[12.5px] leading-relaxed text-ink-soft">
-                {t.body.map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-              </div>
-            </div>
-          </div>
-          {t.points && (
-            <dl className="grid gap-px border-t sm:grid-cols-3" style={{ borderColor: "var(--line)", background: "var(--line)" }}>
-              {t.points.map((p) => (
-                <div key={p.label} className="px-4 py-3" style={{ background: "var(--surface)" }}>
-                  <dt className="text-[12px] font-semibold">{p.label}</dt>
-                  <dd className="mt-1 text-[11.5px] leading-snug text-ink-faint">{p.detail}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </section>
-      }
-      right={
-        <section className="card overflow-hidden">
-          <div className="flex items-center gap-2.5 border-b px-5 py-3" style={{ borderColor: "var(--line)" }}>
-            <LifeBuoy className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2.1} />
-            <p className="flex-1 text-[13px] font-semibold">Questions people ask</p>
-            <Link to="/messages/new" className="text-[12px] font-semibold" style={{ color: "var(--brand-ink)" }}>
-              Ask us
-            </Link>
-          </div>
-          {FAQS.map((g) => (
-            <div key={g.title}>
-              <p className="px-5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">{g.title}</p>
-              <ul>
-                {g.items.map((f) => {
-                  const on = open === f.q;
-                  return (
-                    <li key={f.q} className="border-b last:border-b-0" style={{ borderColor: "var(--line)" }}>
-                      <button
-                        type="button"
-                        aria-expanded={on}
-                        onClick={() => setOpen(on ? null : f.q)}
-                        className="flex w-full items-center gap-2 px-5 py-2.5 text-left"
-                      >
-                        <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug">{f.q}</span>
-                        <ChevronDown
-                          className="h-4 w-4 shrink-0 text-ink-faint transition-transform duration-200"
-                          style={{ transform: on ? "rotate(180deg)" : undefined }}
-                        />
-                      </button>
-                      {on && <p className="px-5 pb-3 text-[12px] leading-relaxed text-ink-soft">{f.a}</p>}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </section>
-      }
-    />
   );
 }
 
@@ -251,8 +149,6 @@ export default function Home({
   const loan = data.activeLoan;
   const { nationalId, phoneMasked } = useSession();
   const [paying, setPaying] = useState(false);
-  /** Which explainer the help pane is open at — set by "Read more" on pane one. */
-  const [topic, setTopic] = useState<HelpTopicId>("credit-score");
 
   // ── "WE COULD NOT ASK" IS NOT "YOU OWE NOTHING" ──────────────────────────
   // On a bridged lender the balance comes from THEIR book over THEIR API. When
@@ -354,8 +250,8 @@ export default function Home({
 
                 So the real figure sits here instead, in the tone the model
                 assigned it, linked to the screen that explains it. The band has
-                not been deleted; it is still on the score card in pane 2, where
-                it belongs next to its own drivers.
+                not been deleted; it is on /score, where it belongs next to its
+                own drivers.
 
                 It renders only when there IS a score. A customer who has not
                 been scored has no score, which is a different thing from a bad
@@ -389,8 +285,8 @@ export default function Home({
                   </span>
                   <span className="tnum text-[12px] font-semibold text-ink-faint">/ {data.scoreMax}</span>
                 </span>
-                {/* The same 300-floor scale as the full card, so the two can
-                    never draw the same number at two different lengths. */}
+                {/* The same 300-floor scale as /score, so the two can never
+                    draw the same number at two different lengths. */}
                 {/* Hidden on the narrowest handsets: it is a second, smaller
                     drawing of a number that is already right above it, and the
                     width it costs is width the limit needs more. */}
@@ -646,142 +542,6 @@ export default function Home({
     </section>
   );
 
-  // ── THE SCORE, IN FULL ────────────────────────────────────────────────────
-  // The chip on pane 1 is the figure; this is the figure with its reasons. It
-  // renders ONLY when there is a score — a customer who has not been scored has
-  // no score, which is different from a bad one, and a gauge sitting at zero
-  // says the second.
-  const scoreCard = data.score != null && (
-    <Link to="/score" className="card block p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Your credit score</p>
-          <p className="mt-1 flex items-baseline gap-1.5">
-            <span className="tnum text-[34px] font-bold leading-none tracking-[-0.03em]" style={{ color: tone.ink }}>
-              {data.score}
-            </span>
-            <span className="text-[14px] font-semibold text-ink-faint">/ {data.scoreMax}</span>
-          </p>
-          {/* The band lives HERE now, beside the drivers that produced it,
-              rather than beside the limit where it read as a verdict. */}
-          {data.band && <p className="mt-1.5 text-[12px] text-ink-soft">{data.band}</p>}
-        </div>
-        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-faint" />
-      </div>
-
-      {/* The scale starts at 300, not 0 — a 584 drawn on a 0–900 bar reads as
-          two thirds of the way along, and on the scale the number actually lives
-          on it is closer to a half. Drawing it against the wrong floor flatters
-          every customer. */}
-      <div className="mt-4 h-2.5 overflow-hidden rounded-full" style={{ background: "var(--surface-sunk)" }}>
-        <div
-          className="h-full rounded-full transition-[width] duration-700"
-          style={{
-            width: `${Math.min(100, Math.max(2, ((data.score - 300) / (data.scoreMax - 300)) * 100))}%`,
-            background: tone.fill,
-          }}
-        />
-      </div>
-      <div className="mt-1.5 flex justify-between text-[10.5px] text-ink-faint">
-        <span className="tnum">300</span>
-        <span className="tnum">{data.scoreMax}</span>
-      </div>
-
-      {/* What moved it. The footer of this app promises that every decision on
-          this screen can be explained on request — this is that promise kept
-          where the number is, rather than in a call. */}
-      {data.scoreDrivers.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t pt-3" style={{ borderColor: "var(--line)" }}>
-          {data.scoreDrivers.slice(0, 4).map((d) => (
-            <li key={d.factor} className="flex items-center gap-2 text-[11.5px] leading-snug text-ink-soft">
-              <span
-                aria-hidden
-                className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold"
-                style={{
-                  background:
-                    d.direction === "reduces"
-                      ? "color-mix(in oklab, var(--green) 20%, transparent)"
-                      : "color-mix(in oklab, #f59e0b 22%, transparent)",
-                  color: d.direction === "reduces" ? "var(--green-ink)" : "#b45309",
-                }}
-              >
-                {d.direction === "reduces" ? "↑" : "↓"}
-              </span>
-              <span className="min-w-0 truncate">{d.factor}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Link>
-  );
-
-  // ── THE SCHEDULE ──────────────────────────────────────────────────────────
-  // Every collections call centre in Kenya exists largely to answer "how much do
-  // I still owe and when is the next one" down a phone. It is not a hard
-  // question. It has simply never been on the customer's own screen — so putting
-  // it here removes calls rather than deflecting them, which is a different and
-  // better thing.
-  //
-  // Rendered only when there IS one. A bridged lender's loan feed carries no
-  // instalment breakdown, so an empty table under the heading "Your schedule"
-  // would read as a loan with no repayments due — the opposite of the truth.
-  // Silence is the honest state.
-  const schedule = data.schedule.length > 0 && (
-    <section className="card overflow-hidden">
-      <div className="flex items-center gap-2.5 border-b px-5 py-3.5" style={{ borderColor: "var(--line)" }}>
-        <p className="flex-1 text-[13px] font-semibold">Your schedule</p>
-        <span className="tnum text-[11.5px] text-ink-faint">
-          {data.schedule.filter((s) => s.status === "PAID").length} of {data.schedule.length} paid
-        </span>
-        <Link to="/repay" className="text-[12px] font-semibold" style={{ color: "var(--brand-ink)" }}>
-          See all
-        </Link>
-      </div>
-
-      <ul>
-        {data.schedule.slice(0, 4).map((s, i, rows) => {
-          const paid = s.status === "PAID";
-          // "Next" is the first row that is not yet paid — a position, not a
-          // status the server sends. Deriving it here means the highlight cannot
-          // disagree with the list it sits in.
-          const next = !paid && rows.slice(0, i).every((r) => r.status === "PAID");
-          return (
-            <li
-              key={s.seq}
-              className="flex items-center gap-3 border-b px-5 py-2.5 last:border-b-0"
-              style={{
-                borderColor: "var(--line)",
-                background: next ? "color-mix(in oklab, var(--lime) 9%, transparent)" : undefined,
-              }}
-            >
-              <span
-                className="tnum grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[12px] font-bold"
-                style={{
-                  background: paid ? "color-mix(in oklab, var(--green) 18%, transparent)" : "var(--surface-sunk)",
-                  color: paid ? "var(--green-ink)" : "var(--ink-faint)",
-                }}
-              >
-                {paid ? "✓" : s.seq}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-medium leading-tight">{shortDate(s.due)}</span>
-                <span className="mt-0.5 block text-[11.5px] text-ink-faint">
-                  {paid ? "Paid" : s.status === "OVERDUE" ? "Overdue" : next ? "Next" : "Scheduled"}
-                </span>
-              </span>
-              <span
-                className="tnum shrink-0 text-[13.5px] font-semibold"
-                style={{ color: paid ? "var(--ink-faint)" : "var(--ink)" }}
-              >
-                {kes(s.amount)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-
   // ── WHAT IS NEXT ──────────────────────────────────────────────────────────
   // The single most asked question in any collections call centre, answered
   // before anybody has to ring.
@@ -890,17 +650,13 @@ export default function Home({
     </section>
   );
 
-  // ── THE PANES ─────────────────────────────────────────────────────────────
-  // Two, not three. The first cut of this was three thinner panes and the middle
-  // one was half empty — which is the failure mode of a fixed frame: whitespace
-  // that reads as content still loading rather than as composition. A pane
-  // should be FULL, because the whole argument for going sideways is that the
-  // rectangle is always worth looking at.
+  // ── THE PANE ──────────────────────────────────────────────────────────────
+  // One. Help & FAQs and the standing pane moved out on 21 Sep 2026 — see the
+  // header. It is still a Deck of one rather than a bare grid, because the deck
+  // is what fits the pane to the fixed frame on a laptop; with a single pane it
+  // draws no pager.
   //
-  // The labels are two words because they are read on a pill in the footer bar.
-  // They answer "what is over there", they do not describe it.
-  //
-  // ── WHY THE FIRST PANE IS IN THIS ORDER ─────────────────────────────────
+  // ── WHY IT IS IN THIS ORDER ─────────────────────────────────────────────
   // Money, then the reason for it, then anything blocking. The number leads
   // because it is why the app was opened; "Why your limit is KSh 45,000" sits
   // DIRECTLY under it, because a figure and its explanation separated by two
@@ -908,12 +664,9 @@ export default function Home({
   // an unverified ID needs to be unmissable, and immediately under the balance
   // on a pane that never scrolls is unmissable.
   //
-  // A pane has a HEIGHT BUDGET, and everything in it has to earn a share. The
-  // shortcuts very nearly did not: as a 2×2 grid they were 176px and pushed this
-  // pane past the fold on a 900px window. Turned four-across they are 120px and
-  // they fit — see the note on `actions` above. That arithmetic is the real
-  // constraint of a fixed frame, and it is a better editor than any amount of
-  // discussion about what is important.
+  // A pane has a HEIGHT BUDGET, and everything in it has to earn a share: the
+  // shortcuts went four-across to buy 56px on a 900px window. That arithmetic is
+  // the real constraint of a fixed frame.
   const panes: Pane[] = [
     {
       id: "money",
@@ -932,28 +685,12 @@ export default function Home({
             <>
               {nextPayment}
               {messages}
-              <AdviceCard onRead={setTopic} />
+              <AdviceCard />
             </>
           }
         />
       ),
     },
-    {
-      id: "help",
-      label: "Help & FAQs",
-      node: <HelpPane topic={topic} onTopic={setTopic} />,
-    },
-    // The score in full and the schedule — only when there is either to show.
-    // A pane of nothing is the failure mode of a fixed frame.
-    ...(scoreCard || schedule
-      ? [
-          {
-            id: "standing",
-            label: "Your standing",
-            node: <PaneGrid left={scoreCard || schedule} right={scoreCard ? schedule || undefined : undefined} />,
-          },
-        ]
-      : []),
   ];
 
   return (

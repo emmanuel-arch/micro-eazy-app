@@ -1566,10 +1566,34 @@ export interface HomeResponse {
   } | null;
 }
 
-export const home = (nationalId: string) =>
+const fetchHome = (nationalId: string) =>
   apiFetch<HomeResponse>(
     "/api/portal/home",
     { method: "POST", body: who(nationalId) },
     // A fan-out across the bridge into the lender own book — see SLOW_TIMEOUT.
     { auth: true, idempotent: true, timeoutMs: SLOW_TIMEOUT },
   );
+
+// ── HOME, ASKED FOR BEFORE IT IS ON SCREEN ──────────────────────────────────
+// The sign-in doors call prefetchHome() the instant the cookie exists, so the
+// read is already on the wire while the router swaps the door for the account
+// and the splash goes up. The first home() after that takes the promise rather
+// than starting a second identical request. One use, and only while fresh: a
+// prefetch older than the window is a stale balance, not a head start.
+const PREFETCH_TTL_MS = 20_000;
+let homeAhead: { id: string; at: number; p: Promise<HomeResponse> } | null = null;
+
+export function prefetchHome(nationalId: string): void {
+  const p = fetchHome(nationalId);
+  // Unhandled here on purpose: whoever takes the promise handles its failure,
+  // and one that is never taken must not surface as an unhandled rejection.
+  p.catch(() => undefined);
+  homeAhead = { id: nationalId, at: Date.now(), p };
+}
+
+export const home = (nationalId: string): Promise<HomeResponse> => {
+  const ahead = homeAhead;
+  homeAhead = null;
+  if (ahead && ahead.id === nationalId && Date.now() - ahead.at < PREFETCH_TTL_MS) return ahead.p;
+  return fetchHome(nationalId);
+};
