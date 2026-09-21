@@ -36,8 +36,8 @@ import { LiquidButton } from "../../components/ui/LiquidButton";
 import ScheduleEditor from "../onboarding/ScheduleEditor";
 import { Holding } from "../kyc/Kyc";
 import {
-  apply, home, journey, listProducts, runCreditCheck,
-  type ApplyPlacement, type ApplyResponse, type BureauReport, type HomeResponse, type JourneyResponse,
+  apply, home, journey, listProducts,
+  type ApplyPlacement, type ApplyResponse, type HomeResponse, type JourneyResponse,
 } from "../../lib/api/portal";
 import { affordableRange, quote, termOptions, ratePerPeriod, type Product } from "../../lib/quote";
 import type { Row } from "../../lib/schedule/reshape";
@@ -107,26 +107,17 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
               ? { icon: FileSpreadsheet, title: "Read your statement first", body: "Your starting limit comes from your M-PESA statement.", cta: "Go to the statement cruncher", to: "/crunch" }
               : null;
 
-  // ── THE BUREAU ───────────────────────────────────────────────────────────
+  // ── THE BUREAU — AUTHORISED HERE, PULLED AT RISK ─────────────────────────
+  // Until 22 Sep 2026 the customer pressed "Run my credit check" here and the
+  // app bought the Metropol file itself, before a product was even chosen. The
+  // pull belongs to the lender's Risk stage: an officer requests it from the
+  // console (through the Interchange) while reviewing THIS application, and the
+  // console's own gate will not let Risk be actioned without it. So this step
+  // takes the customer's authorisation and nothing else — the lawful basis the
+  // officer's pull stands on — and says where the check actually happens.
   const crbFresh = st.crb ? Date.now() - new Date(st.crb.at).getTime() < 30 * 86_400_000 : false;
   const [crbConsent, setCrbConsent] = useState(false);
-  const [crb, setCrb] = useState<{ report: BureauReport | null; reused: boolean; checkedAt: string } | null>(null);
-  const [crbBusy, setCrbBusy] = useState(false);
-  const [crbError, setCrbError] = useState<string | null>(null);
-  const crbDone = !st.crbRequired || crbFresh || Boolean(crb);
-
-  async function pullCrb() {
-    setCrbBusy(true);
-    setCrbError(null);
-    try {
-      const r = await runCreditCheck(true);
-      setCrb({ report: r.report, reused: r.reused, checkedAt: r.checkedAt });
-    } catch (e) {
-      setCrbError(e instanceof Error ? e.message : "The credit check did not complete.");
-    } finally {
-      setCrbBusy(false);
-    }
-  }
+  const crbDone = !st.crbRequired || crbFresh || crbConsent;
 
   // ── THE CHOICES ──────────────────────────────────────────────────────────
   const products = d.products;
@@ -138,6 +129,11 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [crbShare, setCrbShare] = useState(false);
+  // The authorisation given on step one carries to the last step's box, so a
+  // customer is not asked the same question twice in one sitting.
+  useEffect(() => {
+    if (crbConsent) setCrbShare(true);
+  }, [crbConsent]);
 
   const q = useMemo(
     () => (product && range && amount >= range.min && amount <= range.max && term ? quote(product, amount, new Date(), term) : null),
@@ -245,27 +241,21 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
           <div className="space-y-3">
             {st.crbRequired && (
               <StepCard icon={<ShieldCheck className="h-[18px] w-[18px]" style={{ color: "var(--green-ink)" }} />} title="Credit bureau check" meta={crbDone ? <Check className="h-4 w-4" style={{ color: "var(--green-ink)" }} /> : undefined}>
-                {crbFresh && !crb ? (
+                {crbFresh ? (
                   <p className="text-[12.5px] leading-relaxed text-ink-soft">
                     Done on {longDate(st.crb!.at)}. It is current for 30 days, so it is not requested again.
                   </p>
-                ) : crb ? (
-                  <BureauSummary crb={crb} />
                 ) : (
                   <>
                     <p className="text-[12.5px] leading-relaxed text-ink-soft">
-                      We request your identity report and your standard credit report from <strong className="font-semibold text-ink">Metropol CRB</strong>. The
-                      KSh 100 CRB fee on your loan covers both.
+                      {lender.short}&apos;s Risk team requests your credit report from <strong className="font-semibold text-ink">Metropol CRB</strong> when
+                      they review this application. The KSh 100 CRB fee on your loan covers it.
                     </p>
                     <div className="mt-3">
                       <Tick checked={crbConsent} onChange={setCrbConsent}>
                         I authorise {lender.name} to request my credit reports from Metropol CRB for this application.
                       </Tick>
                     </div>
-                    {crbError && <p role="alert" className="mt-2 text-[12.5px] font-medium" style={{ color: "#e11d48" }}>{crbError}</p>}
-                    <LiquidButton size="md" block className="mt-3" loading={crbBusy} disabled={!crbConsent || crbBusy} onClick={pullCrb}>
-                      {crbBusy ? "Requesting your reports" : "Run my credit check"}
-                    </LiquidButton>
                   </>
                 )}
               </StepCard>
@@ -273,7 +263,7 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
             <StepCard icon={<ArrowRight className="h-[18px] w-[18px] text-ink-faint" />} title="Continue">
               <p className="text-[12.5px] leading-relaxed text-ink-soft">Next, choose a product your limit opens.</p>
               <LiquidButton size="lg" block className="mt-4" trailingIcon={ArrowRight} disabled={!crbDone} onClick={() => open(1)}>
-                {crbDone ? "Choose a product" : "Run the credit check first"}
+                {crbDone ? "Choose a product" : "Authorise the credit check first"}
               </LiquidButton>
             </StepCard>
           </div>
@@ -630,23 +620,6 @@ function Line({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
     <div className="flex items-baseline justify-between gap-3 border-b pb-2 last:border-b-0" style={{ borderColor: "var(--line)" }}>
       <dt className="text-ink-faint">{k}</dt>
       <dd className={`tnum shrink-0 text-right ${strong ? "text-[14px] font-bold" : "font-semibold"}`}>{v}</dd>
-    </div>
-  );
-}
-
-function BureauSummary({ crb }: { crb: { report: BureauReport | null; reused: boolean; checkedAt: string } }) {
-  const r = crb.report;
-  if (!r) return <p className="text-[12.5px] text-ink-soft">Your credit check is on file ({longDate(crb.checkedAt)}).</p>;
-  const tone = r.verdict === "CLEAR" ? "good" : r.verdict === "CAUTION" ? "warn" : "bad";
-  return (
-    <div className="space-y-2">
-      <Notice tone={tone} icon={tone === "good" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--green-ink)" }} /> : <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#b45309" }} />}>
-        <span className="font-semibold text-ink">{r.bureau}</span> · {r.summary}
-        {r.mode !== "live" && <span className="block text-[11px] text-ink-faint">Simulated report on this server.</span>}
-      </Notice>
-      <p className="tnum text-[11.5px] text-ink-faint">
-        Reference {r.reference} · {longDate(r.checkedAt)} · {r.accounts.active} active account{r.accounts.active === 1 ? "" : "s"}
-      </p>
     </div>
   );
 }
