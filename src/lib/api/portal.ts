@@ -1597,3 +1597,52 @@ export const home = (nationalId: string): Promise<HomeResponse> => {
   if (ahead && ahead.id === nationalId && Date.now() - ahead.at < PREFETCH_TTL_MS) return ahead.p;
   return fetchHome(nationalId);
 };
+
+// ── Ratiba for a live APPLICATION (bridged lenders — Micromart) ─────────────
+// connected-suite/src/app/api/portal/ratiba/route.ts. The standing-order road
+// above serves a native lender's booked loan; this one raises the mandate for
+// the application at Finance, priced from the plan the customer accepted, on
+// the lender's own paybill. The console's Finance stage watches the same row.
+
+export interface ApplicationMandate {
+  id: string;
+  status: "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" | string;
+  amount: number;
+  frequency: string;
+  startDate: string;
+  endDate: string | null;
+  phone: string;
+  byStaff: boolean;
+  updatedAt: string;
+  message: string | null;
+}
+
+export interface ApplicationRatiba {
+  success: boolean;
+  available: boolean;
+  lender?: string;
+  paybill?: string | null;
+  configured?: boolean;
+  application?: { id: string; stage: string | null; status: string; product: string | null; amount: number };
+  plan?: { amount: number; frequency: string; instalments: number; unit: string; startDate: string; endDate: string };
+  phone?: string;
+  mandate?: ApplicationMandate | null;
+  message?: string;
+  already?: boolean;
+}
+
+/** Where the mandate stands. A read — the screen polls it while the PIN prompt is out. */
+export const applicationRatiba = () =>
+  apiFetch<ApplicationRatiba>(
+    "/api/portal/ratiba",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), action: "status" }) },
+    { auth: true, idempotent: true },
+  );
+
+/** Send the mandate to the handset. NOT idempotent — never retried (see ratibaSetup). */
+export const startApplicationRatiba = () =>
+  apiFetch<ApplicationRatiba>(
+    "/api/portal/ratiba",
+    { method: "POST", body: JSON.stringify({ lenderSlug: lenderSlug(), action: "setup" }) },
+    { auth: true },
+  );

@@ -25,7 +25,7 @@
 // under it. A tracker with no way to ask names a wall without a door.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useNavigate } from "react-router-dom";
-import { Check, CircleDot, Circle, XCircle, MessageSquare, Clock, Banknote } from "lucide-react";
+import { Check, CircleDot, Circle, XCircle, MessageSquare, Clock, Banknote, Radio } from "lucide-react";
 import { Sky } from "../components/shell/Sky";
 import { LiquidButton } from "../components/ui/LiquidButton";
 import { money, shortDate, sinceNow } from "../lib/format";
@@ -121,6 +121,20 @@ export default function Track({ data = SAMPLE_TRACK }: { data?: TrackResponse })
               ))}
             </ol>
           </section>
+
+          {/* M-PESA Ratiba — the Finance stage's mandate, started by the
+              customer. Offered while the application is still moving. */}
+          {!stopped && (
+            <section className="card mt-3 p-5">
+              <p className="flex items-center gap-2 text-[13px] font-semibold"><Radio className="h-4 w-4" /> Auto-repay with M-PESA Ratiba</p>
+              <p className="mt-1.5 max-w-[48ch] text-[12.5px] leading-relaxed text-ink-soft">
+                Let Safaricom pay each instalment from your M-PESA on the due date. You approve it once, with your PIN, and can stop it any time.
+              </p>
+              <LiquidButton size="md" icon={Radio} className="mt-4" onClick={() => go("/ratiba")}>
+                Set up auto-repay
+              </LiquidButton>
+            </section>
+          )}
 
           {/* The one thing a waiting customer can actually do. It is under the
               chain rather than in the aside because on a phone the aside is

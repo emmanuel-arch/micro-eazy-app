@@ -43,6 +43,7 @@ import Exposure from "./screens/Exposure";
 import Messages from "./screens/Messages";
 import Thread from "./screens/Thread";
 import Track from "./screens/Track";
+import AutoRepay from "./screens/AutoRepay";
 import Identity from "./screens/Identity";
 import You from "./screens/You";
 import Help from "./screens/Help";
@@ -455,6 +456,10 @@ function Shell() {
             {/* Both message routes are the same screen — see screens/Thread.tsx.
                 "new" is a composer with no thread yet, and the first send
                 creates one. */}
+            {/* M-PESA Ratiba for the application at Finance — the customer
+                starts the mandate, approves it with their PIN, and the console's
+                Finance stage sees the same order resolve. */}
+            <Route path="/ratiba" element={<RequireSession><AutoRepay /></RequireSession>} />
             <Route path="/messages" element={<RequireSession><Messages /></RequireSession>} />
             <Route path="/messages/:threadId" element={<RequireSession><Thread /></RequireSession>} />
 
