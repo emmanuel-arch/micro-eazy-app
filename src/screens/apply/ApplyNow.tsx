@@ -1,9 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // APPLY NOW — from limit to application, one decision per pane.
 //
-//   1. Standing     your limit, your score, your verification — and the credit
-//                   bureau check, with your permission, where the lender's Risk
-//                   stage requires one
+//   1. Standing     your limit, your score, your verification — and where the
+//                   lender's Risk stage will check the credit bureau
 //   2. Product      what your limit opens: a limit up to KSh 10,900 opens Micro
 //                   Chap Chap; from KSh 10,901 every product is open. Products
 //                   you cannot have yet are shown locked, with the reason
@@ -11,7 +10,8 @@
 //   4. Period       how many weeks — priced per week, so fewer weeks cost less
 //   5. Schedule     move money between instalments; the total cannot change
 //   6. Overview     every figure, every fee and when it is taken, the lender's
-//                   terms word for word, and Apply now
+//                   terms word for word — every consent inside them — and ONE
+//                   tick: accept the terms and request the loan
 //   7. Submitted    where it went — the lender's Risk stage — and how to follow it
 //
 // ── THE SHELF RULES, NOT THIS FILE ──────────────────────────────────────────
@@ -46,7 +46,9 @@ import { useLender } from "../../lib/lender";
 import { useSession } from "../../lib/session";
 import {
   MICROMART_ADDRESS, MICROMART_CONTACT, MICROMART_CRB_CONSENT, MICROMART_TERMS, MICROMART_TERMS_TITLE, MICROMART_TERMS_VERSION,
+  type TermsSection,
 } from "../../lib/terms/micromart";
+import { consentSection, crbAuthorisation } from "../../lib/terms/consents";
 
 type Loaded = { j: JourneyResponse; h: HomeResponse | null; products: Product[] };
 
@@ -107,17 +109,19 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
               ? { icon: FileSpreadsheet, title: "Read your statement first", body: "Your starting limit comes from your M-PESA statement.", cta: "Go to the statement cruncher", to: "/crunch" }
               : null;
 
-  // ── THE BUREAU — AUTHORISED HERE, PULLED AT RISK ─────────────────────────
+  // ── THE BUREAU — PULLED AT RISK, AUTHORISED BY THE TERMS ─────────────────
   // Until 22 Sep 2026 the customer pressed "Run my credit check" here and the
   // app bought the Metropol file itself, before a product was even chosen. The
   // pull belongs to the lender's Risk stage: an officer requests it from the
   // console (through the Interchange) while reviewing THIS application, and the
-  // console's own gate will not let Risk be actioned without it. So this step
-  // takes the customer's authorisation and nothing else — the lawful basis the
-  // officer's pull stands on — and says where the check actually happens.
+  // console's own gate will not let Risk be actioned without it.
+  //
+  // The authorisation that pull stands on is in the terms accepted on the
+  // Overview step — Micromart's closing paragraph, and section 12 for everything
+  // else the console and the Interchange rely on. It used to be asked for here
+  // and again on the Overview with a tick of its own; the terms already said it,
+  // so this step now only says where the check happens.
   const crbFresh = st.crb ? Date.now() - new Date(st.crb.at).getTime() < 30 * 86_400_000 : false;
-  const [crbConsent, setCrbConsent] = useState(false);
-  const crbDone = !st.crbRequired || crbFresh || crbConsent;
 
   // ── THE CHOICES ──────────────────────────────────────────────────────────
   const products = d.products;
@@ -128,12 +132,6 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
   const [term, setTerm] = useState<number | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [accepted, setAccepted] = useState(false);
-  const [crbShare, setCrbShare] = useState(false);
-  // The authorisation given on step one carries to the last step's box, so a
-  // customer is not asked the same question twice in one sitting.
-  useEffect(() => {
-    if (crbConsent) setCrbShare(true);
-  }, [crbConsent]);
 
   const q = useMemo(
     () => (product && range && amount >= range.min && amount <= range.max && term ? quote(product, amount, new Date(), term) : null),
@@ -168,7 +166,10 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
         amount: q.principal,
         termCount: q.periods,
         schedule: plan.map((x) => ({ seq: x.seq, dueDate: x.dueDate, amount: x.cents / 100 })),
-        agreement: { accepted: true, version: MICROMART_TERMS_VERSION, crbConsent: crbShare },
+        // The terms carry the CRB authorisation, so accepting them IS the
+        // consent. crbConsent is still sent for a server that predates
+        // TERMS_VERSION "micromart-terms-2026-09-22" and still reads the flag.
+        agreement: { accepted: true, version: MICROMART_TERMS_VERSION, crbConsent: true },
       });
       setPlaced(r);
       open(6);
@@ -240,30 +241,24 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
 
           <div className="space-y-3">
             {st.crbRequired && (
-              <StepCard icon={<ShieldCheck className="h-[18px] w-[18px]" style={{ color: "var(--green-ink)" }} />} title="Credit bureau check" meta={crbDone ? <Check className="h-4 w-4" style={{ color: "var(--green-ink)" }} /> : undefined}>
+              <StepCard icon={<ShieldCheck className="h-[18px] w-[18px]" style={{ color: "var(--green-ink)" }} />} title="Credit bureau check" meta={crbFresh ? <Check className="h-4 w-4" style={{ color: "var(--green-ink)" }} /> : undefined}>
                 {crbFresh ? (
                   <p className="text-[12.5px] leading-relaxed text-ink-soft">
                     Done on {longDate(st.crb!.at)}. It is current for 30 days, so it is not requested again.
                   </p>
                 ) : (
-                  <>
-                    <p className="text-[12.5px] leading-relaxed text-ink-soft">
-                      {lender.short}&apos;s Risk team requests your credit report from <strong className="font-semibold text-ink">Metropol CRB</strong> when
-                      they review this application. The KSh 100 CRB fee on your loan covers it.
-                    </p>
-                    <div className="mt-3">
-                      <Tick checked={crbConsent} onChange={setCrbConsent}>
-                        I authorise {lender.name} to request my credit reports from Metropol CRB for this application.
-                      </Tick>
-                    </div>
-                  </>
+                  <p className="text-[12.5px] leading-relaxed text-ink-soft">
+                    {lender.short}&apos;s Risk team requests your credit report from <strong className="font-semibold text-ink">Metropol CRB</strong> when
+                    they review this application. The KSh 100 CRB fee on your loan covers it. Your permission for the check is
+                    part of the terms you accept before you apply.
+                  </p>
                 )}
               </StepCard>
             )}
             <StepCard icon={<ArrowRight className="h-[18px] w-[18px] text-ink-faint" />} title="Continue">
               <p className="text-[12.5px] leading-relaxed text-ink-soft">Next, choose a product your limit opens.</p>
-              <LiquidButton size="lg" block className="mt-4" trailingIcon={ArrowRight} disabled={!crbDone} onClick={() => open(1)}>
-                {crbDone ? "Choose a product" : "Authorise the credit check first"}
+              <LiquidButton size="lg" block className="mt-4" trailingIcon={ArrowRight} onClick={() => open(1)}>
+                Choose a product
               </LiquidButton>
             </StepCard>
           </div>
@@ -485,14 +480,13 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
               </dl>
             </StepCard>
             <StepCard icon={<CheckCircle2 className="h-[18px] w-[18px] text-ink-faint" />} title="Apply">
-              <div className="space-y-2.5">
-                <Tick checked={accepted} onChange={setAccepted}>
-                  I have read and accept the {isMicromart ? "Micromart Africa terms and conditions" : `${lender.name} loan terms`}, and I request this loan.
-                </Tick>
-                <Tick checked={crbShare} onChange={setCrbShare}>
-                  {isMicromart ? MICROMART_CRB_CONSENT : `I authorise ${lender.name} to query and share my credit information with licensed CRBs.`}
-                </Tick>
-              </div>
+              <Tick checked={accepted} onChange={setAccepted}>
+                I have read and accept the {isMicromart ? "Micromart Africa terms and conditions" : `${lender.name} loan terms`}, and I request this loan.
+              </Tick>
+              <p className="mt-2 pl-7 text-[11.5px] leading-relaxed text-ink-faint">
+                This includes your permission for the credit bureau check and the other consents in{" "}
+                {isMicromart ? "section 12" : "the Consents section"} of the terms.
+              </p>
               {sendError && (
                 <div className="mt-3">
                   <Notice tone="bad" icon={<TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#e11d48" }} />}>
@@ -502,8 +496,8 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
                   </Notice>
                 </div>
               )}
-              <LiquidButton size="lg" block className="mt-4" icon={Banknote} loading={sending} disabled={!accepted || !crbShare || sending} onClick={submit}>
-                {sending ? "Applying" : !accepted || !crbShare ? "Tick both boxes to apply" : "Apply now"}
+              <LiquidButton size="lg" block className="mt-4" icon={Banknote} loading={sending} disabled={!accepted || sending} onClick={submit}>
+                {sending ? "Applying" : !accepted ? "Tick the box to apply" : "Apply now"}
               </LiquidButton>
             </StepCard>
           </div>
@@ -516,19 +510,8 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 text-[12px] leading-relaxed text-ink-soft" tabIndex={0}>
               {isMicromart ? (
                 <>
-                  {MICROMART_TERMS.map((s) => (
-                    <div key={s.heading}>
-                      <p className="font-semibold text-ink">{s.heading}</p>
-                      {s.blocks.map((b, i) =>
-                        b.kind === "p" ? (
-                          <p key={i} className="mt-1">{b.text}</p>
-                        ) : (
-                          <ul key={i} className="mt-1 list-disc space-y-0.5 pl-4">
-                            {b.items.map((t) => <li key={t}>{t}</li>)}
-                          </ul>
-                        ),
-                      )}
-                    </div>
+                  {[...MICROMART_TERMS, consentSection("Micromart Africa Ltd", 12)].map((s) => (
+                    <TermsSectionView key={s.heading} section={s} />
                   ))}
                   <p>{MICROMART_CRB_CONSENT}</p>
                   <p className="border-t pt-3 text-[11px] text-ink-faint" style={{ borderColor: "var(--line)" }}>
@@ -538,7 +521,11 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
                   </p>
                 </>
               ) : (
-                <p>The lender's full terms are sent to you with your offer.</p>
+                <>
+                  <p>{lender.name}&apos;s full loan terms are sent to you with your offer.</p>
+                  <TermsSectionView section={consentSection(lender.name)} />
+                  <p>{crbAuthorisation(lender.name)}</p>
+                </>
               )}
             </div>
           </section>
@@ -612,6 +599,24 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
       reachable={blocked ? 0 : placed ? 6 : Math.min(reachable, 5)}
       onAt={(n) => !placed && setAt(Math.min(n, reachable))}
     />
+  );
+}
+
+/** One section of the terms as the customer reads it: heading, then paragraphs and lists in order. */
+function TermsSectionView({ section }: { section: TermsSection }) {
+  return (
+    <div>
+      <p className="font-semibold text-ink">{section.heading}</p>
+      {section.blocks.map((b, i) =>
+        b.kind === "p" ? (
+          <p key={i} className="mt-1">{b.text}</p>
+        ) : (
+          <ul key={i} className="mt-1 list-disc space-y-0.5 pl-4">
+            {b.items.map((t) => <li key={t}>{t}</li>)}
+          </ul>
+        ),
+      )}
+    </div>
   );
 }
 

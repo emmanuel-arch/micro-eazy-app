@@ -7,11 +7,18 @@
 // Change the text and you must change the version, or somebody will have agreed
 // to a document that no longer exists.
 //
-// The version is sent with every application and must match the server's
-// constant in connected-suite/src/app/api/portal/apply/route.ts.
+// The version is sent with every application and must match TERMS_VERSION in
+// connected-suite/src/lib/portal/terms-grants.ts, which turns acceptance of
+// THIS version into the customer's recorded consents.
+//
+// ── WHAT THE VERSION COVERS ─────────────────────────────────────────────────
+// The document as presented: Micromart's sections 1–11 below, then section 12
+// (the consents a loan rests on — ours, not Micromart's, see consents.ts), then
+// Micromart's closing CRB paragraph. "micromart-terms-2026-09" was the same
+// text without section 12, when the closing paragraph carried its own tick.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const MICROMART_TERMS_VERSION = "micromart-terms-2026-09";
+export const MICROMART_TERMS_VERSION = "micromart-terms-2026-09-22";
 
 export const MICROMART_TERMS_TITLE = "MICROMART AFRICA TERMS AND CONDITIONS";
 
@@ -150,7 +157,10 @@ export const MICROMART_TERMS: TermsSection[] = [
   },
 ];
 
-/** The CRB authorisation paragraph that closes the document — accepted by its own tick. */
+/**
+ * The CRB authorisation paragraph that closes the document. Accepted with the
+ * rest of the terms by the one tick; since 22 Sep 2026 it has no tick of its own.
+ */
 export const MICROMART_CRB_CONSENT =
   "By entering into this agreement, I authorize Micromart Africa Ltd to access and query my credit information from any of the licensed CRBs and to receive credit reports/scores from any of the licensed CRBs on my behalf in order to assess my creditworthiness, both at the time of application and during the duration of the facility. I further consent to my credit information being shared with the licensed CRBs. This consent shall not be withdrawn during the period in which my application is pending or while I have an outstanding balance.";
 
