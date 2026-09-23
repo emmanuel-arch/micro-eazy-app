@@ -1190,6 +1190,28 @@ export interface OnboardingContract {
     minScoreToBorrow: number;
   };
   capabilities: { ocr: "live" | "simulation"; registry: "live" | "simulation"; face: "live" | "simulation" };
+  /**
+   * WHAT THIS CUSTOMER MAY DO TO THEIR SCHEDULE.
+   *
+   * The lender's Loan settings, resolved for this channel by the server. The
+   * editor used to carry its own list of three shapes, which put a lending
+   * decision in a client bundle: Micromart will take money sooner and will not
+   * offer a customer the option of paying less now and more later, and there
+   * was no way for them to say so. Now one 'reshape' block in Loan settings
+   * drives this screen and the console's calculator, so switching a shape off
+   * removes the button from both.
+   *
+   * Optional because a deployment may still be serving an older console;
+   * absent means "the defaults", which is what this screen did before.
+   */
+  reshape?: {
+    enabled: boolean;
+    presets: { front: boolean; back: boolean };
+    allowPerRow: boolean;
+    allowSkip: boolean;
+    allowDateShift: boolean;
+    maxDaysLater: number;
+  };
 }
 
 export interface JourneyStatus {

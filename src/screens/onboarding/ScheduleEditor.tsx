@@ -37,6 +37,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, RotateCcw, SkipForward, Wand2, Info } from "lucide-react";
 import { LiquidButton } from "../../components/ui/LiquidButton";
 import { exact, money, periodCount, shortDate } from "../../lib/format";
+import type { OnboardingContract } from "../../lib/api/portal";
 import type { Quote } from "../../lib/quote";
 import {
   applyPreset, balance, isBalanced, remaining, setRow, skip, sum, toCents,
@@ -55,11 +56,33 @@ const DEMO_ROWS: Row[] = Array.from({ length: DEMO.periods }, (_, i) => {
   return { seq: i + 1, dueDate: d.toISOString(), cents: DEMO_TOTAL_CENTS / DEMO.periods };
 });
 
+// ── THE SHAPES, AND WHOSE DECISION EACH ONE IS ──────────────────────────────
+// "Even" is the plan the lender already agreed to, so it is always on the table.
+// "More now" moves money TOWARDS the lender and is never a credit risk. "More
+// later" is a genuine credit decision — it puts the lender further out of the
+// money for longer — and it is therefore the lender's to offer, not ours to
+// assume. Micromart offer the first two and not the third.
+//
+// This list is filtered by the contract at render time (see `shapes` below); it
+// is not what the screen shows.
 const PRESETS: { id: Preset; label: string; note: string }[] = [
   { id: "even", label: "Even", note: "The same every time" },
   { id: "front", label: "More now", note: "Heavier early, lighter later" },
   { id: "back", label: "More later", note: "Lighter early, heavier later" },
 ];
+
+/** The lender's rules, as `/api/portal/journey` resolves them for this channel. */
+export type ReshapeRules = NonNullable<OnboardingContract["reshape"]>;
+
+/** What the screen does when the console is older than it is: what it always did. */
+const RESHAPE_FALLBACK: ReshapeRules = {
+  enabled: true,
+  presets: { front: true, back: true },
+  allowPerRow: true,
+  allowSkip: true,
+  allowDateShift: false,
+  maxDaysLater: 0,
+};
 
 /** "week" → "Weeks". The unit is the product's, so a monthly loan does not talk
  *  about weeks — the kind of mismatch that makes a customer distrust the maths
@@ -72,11 +95,19 @@ const plural = (unit: string) => {
 export default function ScheduleEditor({
   /** What the product step priced. Absent when this screen is opened directly. */
   quote,
+  /** The lender's shaping rules. Absent = the defaults this screen always had. */
+  rules,
   onDone,
 }: {
   quote?: Quote | null;
+  rules?: ReshapeRules | null;
   onDone?: (rows: Row[]) => void;
 }) {
+  const R = rules ?? RESHAPE_FALLBACK;
+  // A lender who allows no shaping at all still gets this screen — it is where
+  // the plan is READ — but every control on it is inert, and the copy at the
+  // foot says so rather than leaving somebody prodding a dead input.
+  const shapes = PRESETS.filter((p) => p.id === "even" || (p.id === "front" ? R.presets.front : R.presets.back));
   const initial = quote?.rows ?? DEMO_ROWS;
   const totalCents = useMemo(() => sum(initial), [initial]);
   const principal = quote?.principal ?? DEMO.principal;
@@ -128,7 +159,7 @@ export default function ScheduleEditor({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {PRESETS.map((p) => {
+            {R.enabled && shapes.length > 1 && shapes.map((p) => {
               const on = preset === p.id;
               return (
                 <button
@@ -149,7 +180,7 @@ export default function ScheduleEditor({
                 </button>
               );
             })}
-            {!ok && (
+            {!ok && R.enabled && (
               <button
                 onClick={() => setRows((rs) => balance(rs, totalCents))}
                 className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold"
@@ -210,14 +241,16 @@ export default function ScheduleEditor({
                   <span className="text-[11px] font-semibold text-ink-faint">KSh</span>
                   <input
                     inputMode="decimal"
+                    readOnly={!R.enabled || !R.allowPerRow}
                     aria-label={`Amount for instalment ${r.seq}, due ${shortDate(r.dueDate)}`}
                     value={(r.cents / 100).toFixed(2)}
                     onChange={(e) => edit(r.seq, e.target.value)}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="tnum w-[5.5rem] bg-transparent py-2.5 text-right text-[14px] font-semibold outline-none"
+                    className="tnum w-[5.5rem] bg-transparent py-2.5 text-right text-[14px] font-semibold outline-none read-only:text-ink-soft"
                   />
                 </label>
 
+                {R.enabled && R.allowSkip && (
                 <button
                   onClick={() => {
                     setPreset(null);
@@ -230,6 +263,7 @@ export default function ScheduleEditor({
                 >
                   <SkipForward className="h-4 w-4" strokeWidth={2.1} />
                 </button>
+                )}
               </li>
             ))}
           </ul>
@@ -267,8 +301,15 @@ export default function ScheduleEditor({
           <p className="mt-3 flex items-start gap-2 rounded-lg p-2.5 text-[11.5px] leading-snug text-ink-soft"
             style={{ background: "var(--surface-sunk)" }}>
             <Info className="mt-px h-3.5 w-3.5 shrink-0 text-ink-faint" />
-            Changing the shape does not change what you owe or when the loan clears — it is still{" "}
-            {periodCount(rows.length, unit)}. Your lender reviews the plan before the money moves.
+            {!R.enabled ? (
+              <>This plan is {periodCount(rows.length, unit)} of the same amount, on the dates shown. Your lender books equal instalments.</>
+            ) : (
+              <>
+                Changing the shape does not change what you owe or when the loan clears — it is still{" "}
+                {periodCount(rows.length, unit)}.{!R.presets.back && " You can bring money forward; you cannot push it back."}{" "}
+                Your lender reviews the plan before the money moves.
+              </>
+            )}
           </p>
         </section>
 

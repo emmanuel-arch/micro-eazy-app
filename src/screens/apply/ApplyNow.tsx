@@ -441,6 +441,7 @@ function ApplyFlow({ d, reload }: { d: Loaded; reload: () => void }) {
         <ScheduleEditor
           key={`${q.product.id}:${q.principal}:${q.periods}`}
           quote={q}
+          rules={c?.reshape ?? null}
           onDone={(r) => {
             setRows(r);
             open(5);
