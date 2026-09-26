@@ -213,6 +213,9 @@ function KycFlow({ j, onReload }: { j: JourneyResponse; onReload: () => void }) 
   // self-serve identity step (a bureau pull needs an account), so it runs as a
   // typed ID confirmed by the card photograph.
   const rail: "ocr" | "iprs" | "manual" = c.primary === "iprs" ? "iprs" : c.primary === "ocr" ? "ocr" : "manual";
+  // A lender with no national-registry integration: nothing on these screens may
+  // say a number was, or will be, checked against the registry.
+  const registryOn = c.capabilities?.registry !== "off";
   const needsCardPhoto =
     rail === "ocr" || c.flags.idPhotoRequired || c.documents.some((d) => d.code === "ID_FRONT") || c.ocr.capture === "both";
   const wantsSelfie = c.selfie.required || c.flags.faceMatch;
@@ -318,7 +321,7 @@ function KycFlow({ j, onReload }: { j: JourneyResponse; onReload: () => void }) 
   // ── THE PANES ────────────────────────────────────────────────────────────
   const checks = [
     rail === "ocr" && "We read the front of your ID card.",
-    (rail === "iprs" || rail === "ocr") && "We confirm your ID number and name with the national registry (IPRS).",
+    (rail === "iprs" || rail === "ocr") && registryOn && "We confirm your ID number and name with the national registry (IPRS).",
     needsCardPhoto && rail !== "ocr" && "You photograph the front of your ID card.",
     c.ocr.capture === "both" && "You photograph the back of your ID card.",
     wantsSelfie && "You take a selfie, which we match to the photo on your ID.",
@@ -372,6 +375,7 @@ function KycFlow({ j, onReload }: { j: JourneyResponse; onReload: () => void }) 
       node: (
         <IdentityStep
           rail={rail}
+          registryOn={registryOn}
           needsCardPhoto={needsCardPhoto}
           allowOverride={c.allowManualOverride}
           idNumber={idNumber}
@@ -501,7 +505,7 @@ function KycFlow({ j, onReload }: { j: JourneyResponse; onReload: () => void }) 
               <Row k="ID number" v={idNumber || "—"} />
               <Row k="Name" v={[form.firstName, form.otherName].filter(Boolean).join(" ") || verifiedName || "—"} />
               {form.dob && <Row k="Date of birth" v={form.dob} />}
-              {rail !== "manual" && <Row k="Registry" v={registry ? (registry.matched ? "Confirmed" : "No match") : cardRead?.step.registryFound ? "Confirmed" : cardRead ? "No match" : "—"} />}
+              {rail !== "manual" && registryOn && <Row k="Registry" v={registry ? (registry.matched ? "Confirmed" : "No match") : cardRead?.step.registryFound ? "Confirmed" : cardRead ? "No match" : "—"} />}
               {needsCardPhoto && <Row k="ID photo" v={cardRead ? "Taken" : "—"} />}
               {c.ocr.capture === "both" && <Row k="Back of ID" v={backStored ? "Taken" : "—"} />}
               {wantsSelfie && <Row k="Selfie" v={face ? (face.band === "match" ? "Matched" : face.band === "review" ? "For review" : "Did not match") : "—"} />}
@@ -570,6 +574,7 @@ function KycFlow({ j, onReload }: { j: JourneyResponse; onReload: () => void }) 
 
 function IdentityStep(props: {
   rail: "ocr" | "iprs" | "manual";
+  registryOn: boolean;
   needsCardPhoto: boolean;
   allowOverride: boolean;
   idNumber: string;
@@ -583,7 +588,7 @@ function IdentityStep(props: {
   setCardRead: (r: IdCaptureResult | null) => void;
   onDone: () => void;
 }) {
-  const { rail, needsCardPhoto, allowOverride, idNumber, setIdNumber, consent, sessionId, setSessionId, registry, setRegistry, cardRead, setCardRead, onDone } = props;
+  const { rail, registryOn, needsCardPhoto, allowOverride, idNumber, setIdNumber, consent, sessionId, setSessionId, registry, setRegistry, cardRead, setCardRead, onDone } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -703,7 +708,7 @@ function IdentityStep(props: {
         )}
         <p className="text-[12.5px] leading-relaxed text-ink-soft">
           {rail === "ocr"
-            ? "We read the card, then confirm the number and name with the national registry."
+            ? registryOn ? "We read the card, then confirm the number and name with the national registry." : "We read the number and name straight off the card."
             : rail === "iprs"
               ? needsCardPhoto
                 ? "Once the registry confirms your number, photograph the front of the card."

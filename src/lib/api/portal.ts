@@ -1189,7 +1189,8 @@ export interface OnboardingContract {
     maxLimit: number;
     minScoreToBorrow: number;
   };
-  capabilities: { ocr: "live" | "simulation"; registry: "live" | "simulation"; face: "live" | "simulation" };
+  /** registry "off": the lender has no national-registry (IPRS) integration — never claim a registry check. */
+  capabilities: { ocr: "live" | "simulation"; registry: "live" | "simulation" | "off"; face: "live" | "simulation" };
   /**
    * WHAT THIS CUSTOMER MAY DO TO THEIR SCHEDULE.
    *

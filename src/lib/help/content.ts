@@ -108,7 +108,7 @@ export const FAQS: FaqGroup[] = [
       },
       {
         q: "Why do you verify my identity?",
-        a: "A licensed lender must know who it lends to. We read your ID, confirm it with the national registry, and match your face to the photo on the card. Every customer goes through the same checks — there is no shorter version.",
+        a: "A licensed lender must know who it lends to. We read your ID, match your face to the photo on the card, and a member of the team confirms your identity. Every customer goes through the same checks — there is no shorter version.",
       },
       {
         q: "My ID check says a person is reviewing it. What now?",
