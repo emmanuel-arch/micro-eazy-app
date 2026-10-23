@@ -18,7 +18,7 @@
 //
 //   slug       name                 accent    accent2
 //   micromart  Micromart Africa     #3c320b   #221d06
-//   axe        Axe Capital          #056538   #0b4111
+//   axe        Axe Capital          #001247   #ff8a00   (rebranded 13 Oct 2026)
 //   mular      Mular Credit Ltd     #003c71   #50951d
 //   buysimu    Buy Simu             #d22028   #90161b
 //
@@ -34,12 +34,13 @@
 // and nothing that consumes it has to change.
 //
 // ── ON `available` ──────────────────────────────────────────────────────────
-// All four are real organisations on the LMS. Only Micromart is open to
-// borrowers today — they are pioneering the ecosystem and their book is the one
-// the bridge is wired to. The other three are shown rather than hidden ON
-// PURPOSE: a marketplace with one name in it looks like a bug, and a customer
-// who can see who is coming understands what this is. They are visibly not
-// selectable, never a row that accepts a click and then fails.
+// All four are real organisations on the LMS. The two founding partners are
+// open to borrowers: Micromart, whose book the password bridge is wired to, and
+// Axe (since 23 Oct 2026), who signs in by code through its own org. The other
+// two are shown rather than hidden ON PURPOSE: a marketplace with one name in it
+// looks like a bug, and a customer who can see who is coming understands what
+// this is. They are visibly not selectable, never a row that accepts a click and
+// then fails.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Lender = {
@@ -83,6 +84,12 @@ export type Lender = {
   /** Open to borrowers today. See the note above about why the others are
    *  still rendered. */
   available: boolean;
+  /**
+   * The lender's own password can be checked here. Only Micromart: the check is
+   * a call to Micromart's login (lib/api/portal.ts → micromartSignIn). A lender
+   * without it signs in by code at /<slug>/signin — screens/SignInCode.tsx.
+   */
+  passwordDoor: boolean;
 };
 
 export const LENDERS: Lender[] = [
@@ -105,6 +112,7 @@ export const LENDERS: Lender[] = [
     mark: "/lenders/micromart/logo-transparent.png",
     lockup: "/lenders/micromart/logo.png",
     available: true,
+    passwordDoor: true,
   },
   {
     slug: "axe",
@@ -113,13 +121,20 @@ export const LENDERS: Lender[] = [
     legalName: "Axe Capital",
     slogan: "We provide, you prosper",
     tagline: "Quick personal credit & trader advances",
-    accent: "#056538",
-    accent2: "#0b4111",
-    accentSoft: "rgba(5,101,56,0.12)",
-    accentInkDark: "#089a56",
+    // The Org row since 13 Oct 2026: axemicroenterprise.com's navy, lit by the
+    // orange of its figures (was the logo's green, #056538 / #0b4111).
+    accent: "#001247",
+    accent2: "#ff8a00",
+    accentSoft: "rgba(0,18,71,0.10)",
+    // The navy is near-black on the dark card; their orange reads at ~9:1.
+    accentInkDark: "#ff8a00",
     mark: "/lenders/axe/logo.png",
     lockup: "/lenders/axe/logo.png",
-    available: false,
+    // A founding partner of the Interchange, opened 23 Oct 2026 so the Customer
+    // Portal tile in Axe's console lands on /axe/signin in their livery. Signs in
+    // by code through Axe's own org — there is no Axe password bridge.
+    available: true,
+    passwordDoor: false,
   },
   {
     slug: "mular",
@@ -135,6 +150,7 @@ export const LENDERS: Lender[] = [
     mark: "/lenders/mular/logo.png",
     lockup: "/lenders/mular/logo.png",
     available: false,
+    passwordDoor: false,
   },
   {
     slug: "buysimu",
@@ -150,6 +166,7 @@ export const LENDERS: Lender[] = [
     mark: "/lenders/buysimu/logo.png",
     lockup: "/lenders/buysimu/logo.png",
     available: false,
+    passwordDoor: false,
   },
 ];
 

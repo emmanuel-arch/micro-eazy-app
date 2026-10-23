@@ -26,6 +26,7 @@ import LenderVerify from "./screens/LenderVerify";
 import LenderWelcome from "./screens/LenderWelcome";
 import SignIn from "./screens/SignIn";
 import SignInPassword from "./screens/SignInPassword";
+import SignInCode from "./screens/SignInCode";
 import { Splash, useSplashFloor, type SplashLivery } from "./components/shell/Splash";
 import { Resource } from "./components/data/Resource";
 import { useEffect, useState } from "react";
@@ -125,6 +126,16 @@ function LenderRoute({ children }: { children: ReactNode }) {
   // idempotent, and only notifies subscribers when the slug actually changes.
   setLenderSlug(slug);
   return <>{children}</>;
+}
+
+/**
+ * /<slug>/signin — the password door where this lender has one (Micromart), the
+ * code door where it does not (Axe). Same address, same livery; see
+ * screens/SignInCode.tsx for why Axe must never see the password form.
+ */
+function LenderSignIn() {
+  const { slug = "" } = useParams();
+  return lenderBySlug(slug)?.passwordDoor ? <SignInPassword /> : <SignInCode />;
 }
 
 /** `/` for somebody signed in is their lender's home, `/<slug>`. */
@@ -297,7 +308,7 @@ function Shell() {
                 wears the lender. */}
             <Route path="/lenders" element={<LenderChoice />} />
             <Route path="/:slug/verify" element={<LenderRoute><LenderVerify /></LenderRoute>} />
-            <Route path="/:slug/signin" element={<LenderRoute><SignInPassword /></LenderRoute>} />
+            <Route path="/:slug/signin" element={<LenderRoute><LenderSignIn /></LenderRoute>} />
             <Route path="/:slug/welcome" element={<LenderRoute><LenderWelcome /></LenderRoute>} />
 
             {/* Home reads ONE endpoint, not four. It asks what can I borrow,
