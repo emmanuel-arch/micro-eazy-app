@@ -18,7 +18,7 @@
 //
 //   slug       name                 accent    accent2
 //   micromart  Micromart Africa     #3c320b   #221d06
-//   axe        Axe Capital          #001247   #ff8a00   (rebranded 13 Oct 2026)
+//   axe        Axe Micro-Enterprise Ltd          #001247   #ff8a00   (rebranded 13 Oct 2026)
 //   mular      Mular Credit Ltd     #003c71   #50951d
 //   buysimu    Buy Simu             #d22028   #90161b
 //
@@ -116,9 +116,9 @@ export const LENDERS: Lender[] = [
   },
   {
     slug: "axe",
-    name: "Axe Capital",
+    name: "Axe Micro-Enterprise Ltd",
     short: "Axe",
-    legalName: "Axe Capital",
+    legalName: "Axe Micro-Enterprise Ltd",
     slogan: "We provide, you prosper",
     tagline: "Quick personal credit & trader advances",
     // The Org row since 13 Oct 2026: axemicroenterprise.com's navy, lit by the
